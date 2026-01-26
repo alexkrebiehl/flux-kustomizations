@@ -21,6 +21,11 @@ spec:
       host: "172.21.21.21"
       port: 53
       zone: "krebiehl.com."
-      tsigSecret: "${rfc2136TsigSecret}"
       tsigSecretAlg: "hmac-sha512"
       tsigKeyname: "krebiehl.com."
+    env:
+      - name: EXTERNAL_DNS_RFC2136_TSIG_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: external-dns-tsig
+            key: rfc2136_tsig_secret

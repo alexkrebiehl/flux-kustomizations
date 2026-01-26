@@ -10,6 +10,8 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-kustomizations
+  dependsOn:
+    - name: azure-secret-store
   postBuild:
     substituteFrom:
       - kind: ConfigMap
