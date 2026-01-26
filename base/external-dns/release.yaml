@@ -23,7 +23,7 @@ spec:
       rfc2136-zone: "krebiehl.com."
       rfc2136-tsig-secret-alg: "hmac-sha512"
       rfc2136-tsig-keyname: "krebiehl.com."
-      rfc2136-tsig-axfr: ""
+      rfc2136-tsig-axfr: "true"
     env:
       - name: EXTERNAL_DNS_RFC2136_TSIG_SECRET
         valueFrom:
