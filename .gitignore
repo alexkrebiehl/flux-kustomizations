@@ -1,0 +1,49 @@
+# Flux/Kubernetes Infrastructure Repository
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment and secrets (CRITICAL - never commit these)
+.env
+.env.*
+*.env
+secrets/
+*.secret.yaml
+*.secret.yml
+*.key
+*.crt
+*.pem
+kubeconfig*
+.kube/
+
+# Temporary and log files
+*.log
+*.tmp
+*.bak
+*.backup
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Backup directories
+base.backup/
+*.backup/
+
+# Build and cache directories
+.cache/
+tmp/
+temp/
+
+# Flux-specific
+.flux/
+
+# Git-specific
+*.orig
+*.rej
