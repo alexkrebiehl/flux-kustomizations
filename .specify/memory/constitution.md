@@ -1,50 +1,141 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report:
+Version change: [NEW] → 1.0.0
+Modified principles: None (initial version)
+Added sections: All sections (initial version)
+Removed sections: None
+Templates status:
+  ✅ plan-template.md - Constitution Check section aligns with principles
+  ✅ spec-template.md - Requirements structure supports declarative infrastructure
+  ✅ tasks-template.md - Task organization supports independent deployment verification
+  ✅ checklist-template.md - Generic structure compatible
+  ✅ agent-file-template.md - Generic structure compatible
+Follow-up TODOs: None
+-->
+
+# FluxCD Kustomizations Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Reusability First
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+All FluxCD kustomizations MUST be designed for reusability across multiple clusters.
+Reusable kustomizations MUST reside in the `./base` folder and be self-contained with
+clear documentation. Each base kustomization MUST have a single, well-defined purpose
+and MUST NOT include cluster-specific configuration values.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+**Rationale**: Enables consistent deployments across environments while minimizing
+duplication and maintenance overhead. Base kustomizations serve as the source of truth
+for application configurations.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. Cluster-Specific Overlays
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+Cluster-specific kustomizations MUST reside in `./clusters/<cluster-name>/` directories.
+Each cluster overlay MUST only reference base kustomizations and provide
+cluster-specific configuration through patches or variable substitutions. Cluster
+overlays MUST NOT contain application logic or complete resource definitions that
+should be in base.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+**Rationale**: Separates environment-specific concerns from application definitions,
+making it clear what differs between clusters and enabling independent cluster
+lifecycle management.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. Declarative Infrastructure (NON-NEGOTIABLE)
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+All Kubernetes resources MUST be declared in YAML files managed by FluxCD. No manual
+`kubectl apply` commands or imperative modifications are permitted for managed
+resources. Every desired state change MUST be committed to version control and
+applied through FluxCD reconciliation.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Rationale**: Ensures GitOps principles are maintained, provides full audit trail,
+enables disaster recovery, and prevents configuration drift between declared and
+actual cluster state.
+
+### IV. Validation Before Commit
+
+All kustomization changes MUST be validated using `kustomize build` before committing.
+Changes MUST pass YAML linting and Kubernetes schema validation. Breaking changes to
+base kustomizations MUST be verified against all consuming cluster overlays.
+
+**Rationale**: Catches syntax errors, structural issues, and breaking changes before
+they reach clusters, preventing failed FluxCD reconciliations and potential outages.
+
+### V. Documentation and Context
+
+Every base kustomization MUST include a README.md documenting its purpose, required
+variables, dependencies, and usage examples. Cluster directories MUST document
+cluster-specific configuration decisions and any deviations from standard patterns.
+
+**Rationale**: Enables team members to understand infrastructure decisions, reduces
+onboarding time, and provides context for future modifications without requiring
+tribal knowledge.
+
+## Security and Compliance
+
+### Secret Management
+
+Secrets MUST NOT be committed to the repository in plain text. Secrets MUST be
+managed through sealed-secrets, SOPS, external secret operators, or other secure
+secret management solutions compatible with FluxCD. Secret references in
+kustomizations MUST clearly indicate the secret management mechanism used.
+
+### Resource Limits
+
+All workload resources (Deployments, StatefulSets, DaemonSets) MUST define resource
+requests and limits. NetworkPolicies SHOULD be defined for workloads requiring
+network isolation. Security contexts SHOULD follow least-privilege principles.
+
+## Development Workflow
+
+### Branch Strategy
+
+Changes MUST be developed on feature branches following the pattern
+`feature/<description>` or `fix/<description>`. Pull requests MUST be reviewed by at
+least one team member before merging to main. The main branch represents the desired
+state for all clusters.
+
+### Testing Strategy
+
+Changes SHOULD be tested in a non-production cluster before being applied to
+production. Breaking changes MUST include a migration plan documented in the pull
+request. FluxCD reconciliation status MUST be monitored after merging changes.
+
+### Directory Structure Enforcement
+
+The following structure MUST be maintained:
+
+```
+./base/                    # Reusable kustomizations
+  ├── <component-name>/    # One directory per component
+  │   ├── kustomization.yaml
+  │   ├── <resources>.yaml
+  │   └── README.md
+./clusters/                # Cluster-specific overlays
+  ├── <cluster-name>/      # One directory per cluster
+  │   ├── kustomization.yaml
+  │   └── <component-overlays>/
+```
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+### Amendment Process
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+Constitution amendments require:
+1. Documented proposal explaining the change rationale
+2. Review and approval from infrastructure team leads
+3. Migration plan for existing kustomizations if applicable
+4. Updated version number following semantic versioning
+
+### Versioning Policy
+
+- **MAJOR**: Breaking changes to structure, removal of required principles
+- **MINOR**: New principles added, expanded guidance
+- **PATCH**: Clarifications, documentation improvements, non-semantic fixes
+
+### Compliance
+
+All pull requests MUST verify compliance with this constitution. Complexity or
+deviations MUST be explicitly justified in the pull request description. Infrastructure
+reviews MUST verify adherence to reusability, security, and documentation principles.
+
+**Version**: 1.0.0 | **Ratified**: 2026-01-25 | **Last Amended**: 2026-01-25
