@@ -17,13 +17,13 @@ spec:
   values:
     provider: rfc2136
     extraArgs:
-      - --txt-owner-id=${clusterName}
-      - --rfc2136-host=172.21.21.21
-      - --rfc2136-port=53
-      - --rfc2136-zone=krebiehl.com.
-      - --rfc2136-tsig-secret-alg=hmac-sha512
-      - --rfc2136-tsig-keyname=krebiehl.com.
-      - --rfc2136-tsig-axfr
+      txt-owner-id: ${clusterName}
+      rfc2136-host: "172.21.21.21"
+      rfc2136-port: "53"
+      rfc2136-zone: "krebiehl.com."
+      rfc2136-tsig-secret-alg: "hmac-sha512"
+      rfc2136-tsig-keyname: "krebiehl.com."
+      rfc2136-tsig-axfr: ""
     env:
       - name: EXTERNAL_DNS_RFC2136_TSIG_SECRET
         valueFrom:
