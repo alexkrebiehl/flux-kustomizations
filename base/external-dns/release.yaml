@@ -10,7 +10,7 @@ spec:
       chart: external-dns
       version: "8.8.0"
       sourceRef:
-        kind: HelmRepository
+        kind: OCIRepository
         name: external-dns
         namespace: external-dns
       interval: 1h
