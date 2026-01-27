@@ -6,6 +6,7 @@ resources:
   - metallb-ks.yaml
   - metallb-address-pool-ks.yaml
   - traefik-ks.yaml
+  - nfs-subdir-external-provisioner-ks.yaml
   - external-secrets-ks.yaml
   - azure-secret-store-ks.yaml
   - cert-manager-issuer-ks.yaml
