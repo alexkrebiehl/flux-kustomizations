@@ -16,6 +16,7 @@ spec:
       interval: 1h
   values:
     provider: rfc2136
+    policy: sync
     domainFilters:
       - krebiehl.com
     extraArgs:
@@ -26,7 +27,6 @@ spec:
       - --rfc2136-tsig-secret-alg=hmac-sha512
       - --rfc2136-tsig-keyname=krebiehl.com.
       - --rfc2136-min-ttl=0s
-      - --policy=sync
     env:
       - name: EXTERNAL_DNS_RFC2136_TSIG_SECRET
         valueFrom:
