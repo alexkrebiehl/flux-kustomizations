@@ -5,5 +5,6 @@ resources:
   - external-dns-ks.yaml
   - metallb-ks.yaml
   - metallb-address-pool-ks.yaml
+  - traefik-ks.yaml
   - external-secrets-ks.yaml
   - azure-secret-store-ks.yaml
