@@ -16,3 +16,7 @@ spec:
       interval: 1h
   values:
     installCRDs: true
+    extraArgs:
+      - --dns01-recursive-nameservers-only
+      # bypass local DNS resolvers that may not be able to resolve public DNS records
+      - --dns01-recursive-nameservers=8.8.8.8:53,1.1.1.1:53
