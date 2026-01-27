@@ -1,0 +1,10 @@
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: ClusterPolicy
+metadata:
+  name: default-issuer-policy
+spec:
+  defaults:
+    issuerRef:
+      name: letsencrypt-production
+      kind: ClusterIssuer
+      group: cert-manager.io

@@ -8,3 +8,4 @@ resources:
   - traefik-ks.yaml
   - external-secrets-ks.yaml
   - azure-secret-store-ks.yaml
+  - cert-manager-issuer-ks.yaml
