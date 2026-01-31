@@ -1,0 +1,10 @@
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: OCIRepository
+metadata:
+  name: proxmox-csi-plugin
+  namespace: csi-proxmox
+spec:
+  interval: 1h
+  url: oci://ghcr.io/sergelogvinov/charts
+  ref:
+    semver: "0.17.1"

@@ -1,0 +1,31 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: proxmox-csi-plugin
+  namespace: csi-proxmox
+spec:
+  interval: 15m
+  chart:
+    spec:
+      chart: proxmox-csi-plugin
+      sourceRef:
+        kind: OCIRepository
+        name: proxmox-csi-plugin
+        namespace: csi-proxmox
+      interval: 1h
+  values:
+    config:
+      clusters:
+        - url: "${proxmoxUrl}"
+          insecure: ${proxmoxInsecure}
+          token_id: "${proxmoxTokenId}"
+          token_secret: "${proxmoxTokenSecret}"
+          region: "${proxmoxRegion}"
+
+    storageClass:
+      - name: proxmox-zpool
+        storage: zpool
+        reclaimPolicy: Delete
+        fstype: ext4
+        ssd: true
+        cache: writeback
