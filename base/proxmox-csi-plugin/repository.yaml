@@ -5,6 +5,9 @@ metadata:
   namespace: csi-proxmox
 spec:
   interval: 1h
-  url: oci://ghcr.io/sergelogvinov/charts
+  url: oci://ghcr.io/sergelogvinov/charts/proxmox-csi-plugin
+  layerSelector:
+    mediaType: "application/vnd.cncf.helm.chart.content.v1.tar+gzip"
+    operation: copy
   ref:
     semver: "0.17.1"
