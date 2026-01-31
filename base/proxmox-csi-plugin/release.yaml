@@ -27,5 +27,3 @@ spec:
         storage: zpool
         reclaimPolicy: Delete
         fstype: ext4
-        ssd: true
-        cache: writeback
