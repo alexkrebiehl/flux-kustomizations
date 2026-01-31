@@ -1,13 +1,10 @@
 apiVersion: source.toolkit.fluxcd.io/v1
-kind: OCIRepository
+kind: GitRepository
 metadata:
   name: proxmox-csi-plugin
   namespace: csi-proxmox
 spec:
   interval: 1h
-  url: oci://ghcr.io/sergelogvinov/charts/proxmox-csi-plugin
-  layerSelector:
-    mediaType: "application/vnd.cncf.helm.chart.content.v1.tar+gzip"
-    operation: copy
+  url: https://github.com/sergelogvinov/proxmox-csi-plugin
   ref:
-    tag: "v0.17.1"
+    tag: v0.17.1

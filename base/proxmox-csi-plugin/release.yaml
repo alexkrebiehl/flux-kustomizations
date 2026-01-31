@@ -5,10 +5,14 @@ metadata:
   namespace: csi-proxmox
 spec:
   interval: 15m
-  chartRef:
-    kind: OCIRepository
-    name: proxmox-csi-plugin
-    namespace: csi-proxmox
+  chart:
+    spec:
+      chart: charts/proxmox-csi-plugin
+      sourceRef:
+        kind: GitRepository
+        name: proxmox-csi-plugin
+        namespace: csi-proxmox
+      interval: 1h
   values:
     config:
       clusters:
