@@ -18,29 +18,29 @@ data:
     node server/index.mjs &
     WGEASY_PID=$!
 
-    # Wait for wg0.conf to be created (max 60 seconds)
-    echo "Waiting for wg0.conf to be created..."
-    for i in $(seq 1 60); do
+    # Wait for wg-easy to fully initialize and fail to start WireGuard
+    # This ensures wg0.conf is in its final state before we patch it
+    echo "Waiting for wg-easy initialization to complete..."
+    sleep 10
+
+    # Monitor and patch wg0.conf whenever it changes
+    echo "Starting configuration patcher..."
+    while kill -0 $WGEASY_PID 2>/dev/null; do
       if [ -f /etc/wireguard/wg0.conf ]; then
-        echo "Found wg0.conf, applying Talos compatibility patch..."
-        break
+        # Check if file contains iptables commands (needs patching)
+        if grep -q "^PostUp = iptables" /etc/wireguard/wg0.conf; then
+          echo "Detected iptables config, applying Talos compatibility patch..."
+          sed -i 's/^PostUp = iptables.*/PostUp = echo "WireGuard interface up"/' /etc/wireguard/wg0.conf
+          sed -i 's/^PostDown = iptables.*/PostDown = echo "WireGuard interface down"/' /etc/wireguard/wg0.conf
+
+          # Restart WireGuard interface with patched config
+          echo "Restarting WireGuard interface..."
+          wg-quick down wg0 2>/dev/null || true
+          wg-quick up wg0 && echo "WireGuard interface started successfully"
+        fi
       fi
-      sleep 1
+      sleep 5
     done
 
-    # Patch iptables commands for Talos (nftables)
-    if [ -f /etc/wireguard/wg0.conf ]; then
-      sed -i 's/^PostUp = iptables.*/PostUp = echo "WireGuard interface up"/' /etc/wireguard/wg0.conf
-      sed -i 's/^PostDown = iptables.*/PostDown = echo "WireGuard interface down"/' /etc/wireguard/wg0.conf
-      echo "Patched iptables commands"
-
-      # Bring up WireGuard interface
-      echo "Starting WireGuard interface..."
-      wg-quick down wg0 2>/dev/null || true
-      wg-quick up wg0 && echo "WireGuard interface started successfully"
-    else
-      echo "Warning: wg0.conf not found after 60 seconds"
-    fi
-
-    # Wait for main process
+    # Wait for main process to exit
     wait $WGEASY_PID
