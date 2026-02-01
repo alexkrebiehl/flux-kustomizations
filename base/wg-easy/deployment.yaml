@@ -47,6 +47,7 @@ spec:
         - name: wg-easy-data
           mountPath: /etc/wireguard
         securityContext:
+          privileged: true
           capabilities:
             add:
             - NET_ADMIN
