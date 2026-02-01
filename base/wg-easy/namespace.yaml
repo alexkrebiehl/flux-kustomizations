@@ -6,3 +6,6 @@ metadata:
     app.kubernetes.io/name: wg-easy
     app.kubernetes.io/component: vpn
     app.kubernetes.io/managed-by: kustomize
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
