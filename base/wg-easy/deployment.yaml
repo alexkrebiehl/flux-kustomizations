@@ -33,6 +33,10 @@ spec:
           value: "172.22.1.x"
         - name: WG_PORT
           value: "51820"
+        - name: WG_POST_UP
+          value: "echo 'WireGuard interface up - iptables/nftables managed by Kubernetes'"
+        - name: WG_POST_DOWN
+          value: "echo 'WireGuard interface down'"
         # Optional: Uncomment to set web UI password
         # - name: PASSWORD
         #   value: "your-secure-password"
