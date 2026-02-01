@@ -28,7 +28,7 @@ spec:
         imagePullPolicy: IfNotPresent
         env:
         - name: WG_HOST
-          value: "CHANGEME"  # Set to LoadBalancer external IP after deployment
+          value: "vpn.krebiehl.com"
         - name: WG_DEFAULT_ADDRESS
           value: "172.22.1.x"
         - name: WG_PORT
