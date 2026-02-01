@@ -34,6 +34,8 @@ spec:
           value: "172.22.1.x"
         - name: WG_PORT
           value: "51820"
+        - name: WG_DEFAULT_DNS
+          value: "172.21.21.21"
         - name: WG_POST_UP
           value: "echo 'WireGuard interface up - iptables/nftables managed by Kubernetes'"
         - name: WG_POST_DOWN
