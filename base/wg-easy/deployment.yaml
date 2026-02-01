@@ -50,6 +50,21 @@ spec:
         volumeMounts:
         - name: wg-easy-data
           mountPath: /etc/wireguard
+        lifecycle:
+          postStart:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  # Wait for wg0.conf to be created
+                  while [ ! -f /etc/wireguard/wg0.conf ]; do sleep 1; done
+                  # Replace iptables commands with echo (Talos uses nftables)
+                  sed -i 's/^PostUp = iptables.*/PostUp = echo \"WireGuard interface up\"/' /etc/wireguard/wg0.conf
+                  sed -i 's/^PostDown = iptables.*/PostDown = echo \"WireGuard interface down\"/' /etc/wireguard/wg0.conf
+                  # Restart WireGuard interface with fixed config
+                  wg-quick down wg0 2>/dev/null || true
+                  wg-quick up wg0
         securityContext:
           privileged: true
           capabilities:
