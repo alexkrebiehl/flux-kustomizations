@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wg-easy-startup
+  namespace: wg-easy
+  labels:
+    app.kubernetes.io/name: wg-easy
+    app.kubernetes.io/component: vpn
+    app.kubernetes.io/managed-by: kustomize
+data:
+  startup.sh: |
+    #!/bin/sh
+    set -e
+
+    echo "Starting wg-easy with Talos Linux compatibility..."
+
+    # Start wg-easy in background
+    node server/index.mjs &
+    WGEASY_PID=$!
+
+    # Wait for wg0.conf to be created (max 60 seconds)
+    echo "Waiting for wg0.conf to be created..."
+    for i in $(seq 1 60); do
+      if [ -f /etc/wireguard/wg0.conf ]; then
+        echo "Found wg0.conf, applying Talos compatibility patch..."
+        break
+      fi
+      sleep 1
+    done
+
+    # Patch iptables commands for Talos (nftables)
+    if [ -f /etc/wireguard/wg0.conf ]; then
+      sed -i 's/^PostUp = iptables.*/PostUp = echo "WireGuard interface up"/' /etc/wireguard/wg0.conf
+      sed -i 's/^PostDown = iptables.*/PostDown = echo "WireGuard interface down"/' /etc/wireguard/wg0.conf
+      echo "Patched iptables commands"
+
+      # Bring up WireGuard interface
+      echo "Starting WireGuard interface..."
+      wg-quick down wg0 2>/dev/null || true
+      wg-quick up wg0 && echo "WireGuard interface started successfully"
+    else
+      echo "Warning: wg0.conf not found after 60 seconds"
+    fi
+
+    # Wait for main process
+    wait $WGEASY_PID
