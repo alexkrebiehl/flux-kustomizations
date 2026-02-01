@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wg-easy
+  labels:
+    app.kubernetes.io/name: wg-easy
+    app.kubernetes.io/component: vpn
+    app.kubernetes.io/managed-by: kustomize

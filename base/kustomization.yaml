@@ -11,3 +11,4 @@ resources:
   - azure-secret-store-ks.yaml
   - cert-manager-issuer-ks.yaml
   - proxmox-csi-plugin-ks.yaml
+  - wg-easy-ks.yaml

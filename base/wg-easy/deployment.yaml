@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wg-easy
+  namespace: wg-easy
+  labels:
+    app.kubernetes.io/name: wg-easy
+    app.kubernetes.io/component: vpn
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Required for ReadWriteOnce PVC
+  selector:
+    matchLabels:
+      app: wg-easy
+  template:
+    metadata:
+      labels:
+        app: wg-easy
+        app.kubernetes.io/name: wg-easy
+        app.kubernetes.io/component: vpn
+        version: 15.2.1
+    spec:
+      containers:
+      - name: wg-easy
+        image: ghcr.io/wg-easy/wg-easy:15.2.1
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: WG_HOST
+          value: "CHANGEME"  # Set to LoadBalancer external IP after deployment
+        - name: WG_DEFAULT_ADDRESS
+          value: "172.22.1.x"
+        - name: WG_PORT
+          value: "51820"
+        # Optional: Uncomment to set web UI password
+        # - name: PASSWORD
+        #   value: "your-secure-password"
+        ports:
+        - name: wireguard
+          containerPort: 51820
+          protocol: UDP
+        - name: web-ui
+          containerPort: 51821
+          protocol: TCP
+        volumeMounts:
+        - name: wg-easy-data
+          mountPath: /etc/wireguard
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+            - SYS_MODULE
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 51821
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 51821
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: wg-easy-data
+        persistentVolumeClaim:
+          claimName: wg-easy-data

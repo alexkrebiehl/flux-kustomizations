@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: wg-easy
+  namespace: wg-easy
+  labels:
+    app.kubernetes.io/name: wg-easy
+    app.kubernetes.io/component: vpn
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  type: LoadBalancer
+  selector:
+    app: wg-easy
+  ports:
+  - name: wireguard
+    protocol: UDP
+    port: 51820
+    targetPort: 51820
+  - name: web-ui
+    protocol: TCP
+    port: 51821
+    targetPort: 51821
