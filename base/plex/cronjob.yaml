@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: plex-restart
+  namespace: plex
+  labels:
+    app.kubernetes.io/name: plex
+    app.kubernetes.io/component: restart-job
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  schedule: "0 5 * * *"  # 5 AM daily
+  timeZone: "America/New_York"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: plex
+            app.kubernetes.io/component: restart-job
+        spec:
+          serviceAccountName: plex-restart
+          restartPolicy: OnFailure
+          containers:
+            - name: kubectl
+              image: bitnami/kubectl:latest
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  echo "Restarting Plex deployment at $(date)"
+                  kubectl rollout restart deployment/plex -n plex
+                  echo "Restart initiated successfully"

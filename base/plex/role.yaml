@@ -1,0 +1,14 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: plex-restart
+  namespace: plex
+  labels:
+    app.kubernetes.io/name: plex
+    app.kubernetes.io/component: restart-job
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+    resourceNames: ["plex"]

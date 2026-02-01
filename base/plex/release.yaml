@@ -1,0 +1,80 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: plex
+  namespace: plex
+spec:
+  interval: 15m
+  chart:
+    spec:
+      chart: plex-media-server
+      version: "1.4.0"
+      sourceRef:
+        kind: HelmRepository
+        name: plex
+        namespace: plex
+      interval: 1h
+  values:
+    # Plex configuration
+    timezone: America/New_York
+
+    # Use the "public" image tag - this tag downloads the latest Plex Server version during startup
+    image:
+      tag: public
+
+    # Storage configuration - use proxmox-zpool storage class
+    persistence:
+      config:
+        enabled: true
+        storageClass: proxmox-zpool
+        size: 50Gi
+        accessMode: ReadWriteOnce
+
+    # Service configuration
+    service:
+      type: LoadBalancer
+      port: 32400
+
+    # Resource limits
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 500m
+
+    # NFS volumes for media library and optimized media
+    extraVolumes:
+      - name: media
+        nfs:
+          server: diskstation.krebiehl.com
+          path: /volume1/plex
+          readOnly: true
+      - name: optimized
+        nfs:
+          server: diskstation.krebiehl.com
+          path: /volume1/plex-optimized
+          readOnly: false
+
+    extraVolumeMounts:
+      - name: media
+        mountPath: /media/library
+        readOnly: true
+      - name: optimized
+        mountPath: /media/optimized
+        readOnly: false
+
+    # Ingress configuration (optional - update hostname as needed)
+    ingress:
+      enabled: true
+      ingressClassName: traefik
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      hosts:
+        - host: plex.krebiehl.com
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - secretName: plex-tls
+          hosts:
+            - plex.krebiehl.com
