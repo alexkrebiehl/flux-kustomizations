@@ -1,0 +1,121 @@
+# Plex Library Archive Structure Contract
+
+# Archive Name: plex-library.tar.gz
+# Format: gzip-compressed tarball
+# Expected Size: 2-10GB (depending on library size and metadata cache)
+
+# Directory Structure Inside Archive:
+#
+# Library/
+# └── Application Support/
+#     └── Plex Media Server/
+#         ├── Plug-in Support/
+#         │   ├── Databases/
+#         │   │   ├── com.plexapp.plugins.library.db      (REQUIRED - main database)
+#         │   │   ├── com.plexapp.plugins.library.db-shm  (REQUIRED - shared memory)
+#         │   │   └── com.plexapp.plugins.library.db-wal  (REQUIRED - write-ahead log)
+#         │   ├── Data/                                    (OPTIONAL - plugin data)
+#         │   └── Caches/                                  (OPTIONAL - plugin caches)
+#         ├── Metadata/                                    (REQUIRED - artwork, posters, thumbnails)
+#         │   ├── Movies/
+#         │   ├── TV Shows/
+#         │   ├── Artists/
+#         │   └── Photos/
+#         ├── Cache/                                       (OPTIONAL - can be excluded to save space)
+#         │   └── Transcode/
+#         ├── Preferences.xml                              (REQUIRED - server config, machine ID)
+#         ├── Logs/                                        (OPTIONAL - can be excluded)
+#         └── Crash Reports/                               (OPTIONAL - can be excluded)
+
+# Extraction Contract:
+extraction:
+  target_path: "/config/"
+  result_path: "/config/Library/Application Support/Plex Media Server/"
+  permissions: "plex:plex" (UID 1000)
+
+# Validation Contract:
+validation:
+  required_files:
+    - "Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db"
+    - "Library/Application Support/Plex Media Server/Preferences.xml"
+  required_directories:
+    - "Library/Application Support/Plex Media Server/Metadata/"
+  integrity_checks:
+    - "SQLite database integrity (PRAGMA integrity_check)"
+    - "Preferences.xml is valid XML"
+
+# Size Constraints:
+size:
+  recommended_max: "40GB uncompressed"
+  pvc_size: "50Gi"
+  compression_ratio: "~40% (10GB → 4GB typical)"
+
+# Creation Command:
+creation:
+  command: "tar czf plex-library.tar.gz Library/"
+  working_directory: "/var/lib/plexmediaserver/"
+  prerequisites:
+    - "Plex service must be stopped"
+    - "Database integrity verified"
+
+# Transfer Methods:
+transfer:
+  method1_local_copy:
+    description: "Copy to local machine, then upload to pod"
+    steps:
+      - "scp alex@192.168.13.21:/tmp/plex-library.tar.gz ."
+      - "kubectl cp plex-library.tar.gz plex/plex-plex-media-server-0:/tmp/"
+
+  method2_init_container:
+    description: "Automated via init container (requires archive accessible to pod)"
+    script: |
+      #!/bin/sh
+      # Idempotency check
+      if [ -d "/config/Library" ]; then
+        echo "PMS library already exists, exiting."
+        exit 0
+      fi
+
+      # Download (or copy from mounted location)
+      echo "Extracting Plex library..."
+      cd /config
+      tar xzf /tmp/plex-library.tar.gz
+      rm /tmp/plex-library.tar.gz
+
+      echo "Migration complete!"
+
+# Post-Migration Configuration:
+post_migration:
+  library_path_updates:
+    old_paths:
+      - "/mnt/nas-plex"
+      - "/mnt/nas-plex-optimized"
+    new_paths:
+      - "/media/library"
+      - "/media/optimized"
+    update_method: "Plex Web UI (Settings → Libraries → Edit → Update folder paths)"
+
+  nfs_mounts_required:
+    - mount_path: "/media/library"
+      nfs_server: "diskstation.krebiehl.com"
+      nfs_export: "/volume1/plex"
+      read_only: true
+    - mount_path: "/media/optimized"
+      nfs_server: "diskstation.krebiehl.com"
+      nfs_export: "/volume1/plex-optimized"
+      read_only: false
+
+# Version Compatibility:
+version:
+  requirement: "Source and target Plex versions must match exactly"
+  detection_command: "/usr/lib/plexmediaserver/Plex\\ Media\\ Server --version"
+  format: "1.40.1.8227-c0dd5a73e"
+  helm_configuration: "image.tag: <version>"
+
+# Rollback:
+rollback:
+  method: "Delete PVC and retry"
+  commands:
+    - "kubectl delete pvc -n plex pms-config-plex-plex-media-server-0"
+    - "kubectl delete pod -n plex plex-plex-media-server-0"
+  source_vm: "Remains untouched, Plex service can be restarted"
