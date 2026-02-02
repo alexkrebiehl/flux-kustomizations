@@ -23,12 +23,9 @@ spec:
       tag: public
 
     # Storage configuration - use proxmox-zpool storage class
-    persistence:
-      config:
-        enabled: true
-        storageClass: proxmox-zpool
-        size: 50Gi
-        accessMode: ReadWriteOnce
+    pms:
+      storageClassName: proxmox-zpool
+      configStorage: 50Gi
 
     # Service configuration
     service:
