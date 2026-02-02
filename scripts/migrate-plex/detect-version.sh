@@ -50,8 +50,8 @@ function detect_plex_version() {
         return 1
     fi
 
-    # Extract version number (format: 1.40.5.8897-e5c93e3f1)
-    local version_number=$(echo "$version" | grep -oP '\d+\.\d+\.\d+\.\d+-[a-z0-9]+' | head -1)
+    # Extract version number (format: 1.40.5.8897-e5c93e3f1 or v1.40.5.8897-e5c93e3f1)
+    local version_number=$(echo "$version" | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+-[a-z0-9]+' | head -1 | sed 's/^v//')
 
     if [ -z "$version_number" ]; then
         log_error "Could not parse Plex version: $version"

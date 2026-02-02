@@ -38,6 +38,58 @@ spec:
         memory: 512Mi
         cpu: 500m
 
+    # Init container for library migration
+    extraInitContainers:
+      - name: library-extractor
+        image: alpine:3.19
+        command:
+          - /bin/sh
+          - -c
+          - |
+            #!/bin/sh
+            set -e
+
+            ARCHIVE="/config/plex-library.tar.gz"
+            LIBRARY_DIR="/config/Library"
+
+            echo "=== Plex Library Migration Init Container ==="
+
+            # Check if Library directory already exists
+            if [ -d "$LIBRARY_DIR" ]; then
+              echo "Library directory already exists - skipping extraction"
+              exit 0
+            fi
+
+            # Check if migration archive exists
+            if [ ! -f "$ARCHIVE" ]; then
+              echo "No migration archive found at $ARCHIVE - skipping extraction"
+              echo "This is normal for first-time startup"
+              exit 0
+            fi
+
+            echo "Migration archive found: $ARCHIVE"
+            echo "Extracting library data..."
+
+            # Extract archive
+            tar xzf "$ARCHIVE" -C /config/
+
+            # Verify extraction
+            if [ -d "$LIBRARY_DIR" ]; then
+              echo "Library extracted successfully!"
+
+              # Remove archive after successful extraction
+              rm -f "$ARCHIVE"
+              echo "Migration archive removed"
+            else
+              echo "ERROR: Library directory not found after extraction"
+              exit 1
+            fi
+
+            echo "=== Migration complete - starting Plex ==="
+        volumeMounts:
+          - name: pms-config
+            mountPath: /config
+
     # NFS volumes for media library and optimized media
     extraVolumes:
       - name: media

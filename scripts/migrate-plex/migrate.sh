@@ -108,6 +108,16 @@ function detect_and_verify_version() {
 function verify_source_database() {
     log_step "Verifying source database integrity..."
 
+    # Check if sqlite3 is installed on source VM
+    local has_sqlite3=$(ssh "${SOURCE_VM_USER}@${SOURCE_VM_HOST}" "command -v sqlite3 >/dev/null && echo yes || echo no")
+
+    if [ "$has_sqlite3" != "yes" ]; then
+        log_warn "sqlite3 not found on source VM - skipping database verification"
+        log_info "Migration will continue without verification"
+        log_info "To enable verification, install sqlite3 on source VM: sudo apt-get install sqlite3"
+        return 0
+    fi
+
     # Run verification script on source VM
     log_info "Running database integrity check on source VM..."
 
@@ -120,7 +130,14 @@ function verify_source_database() {
     else
         log_error "Source database verification failed:"
         echo "$result"
-        return 1
+        log_warn "Continue anyway? (yes/no)"
+        read -p "> " response
+        if [[ "$response" =~ ^[Yy]es$ ]]; then
+            log_warn "Continuing migration despite verification failure"
+            return 0
+        else
+            return 1
+        fi
     fi
 }
 
@@ -206,40 +223,53 @@ function upload_archive_to_pod() {
 }
 
 function extract_archive_in_pod() {
-    log_step "Extracting archive in pod..."
+    log_step "Archive uploaded - init container will extract on next startup..."
 
-    # Extract archive in pod (this will create /config/Library/)
-    kubectl exec -n "$K8S_NAMESPACE" "$K8S_POD_NAME" -- \
-        tar xzf "$K8S_CONFIG_DIR/$ARCHIVE_NAME" -C "$K8S_CONFIG_DIR/" --strip-components=0
+    log_info "The init container will automatically:"
+    log_info "  1. Detect the archive in /config/"
+    log_info "  2. Extract it before Plex starts"
+    log_info "  3. Remove the archive after successful extraction"
 
-    # Verify extraction
-    local library_exists=$(kubectl exec -n "$K8S_NAMESPACE" "$K8S_POD_NAME" -- \
-        test -d "$K8S_CONFIG_DIR/Library" && echo "yes" || echo "no")
-
-    if [ "$library_exists" != "yes" ]; then
-        log_error "Library directory not found after extraction"
-        return 1
-    fi
-
-    log_info "${GREEN}✓ Archive extracted successfully${NC}"
-
-    # Clean up archive in pod
-    kubectl exec -n "$K8S_NAMESPACE" "$K8S_POD_NAME" -- \
-        rm -f "$K8S_CONFIG_DIR/$ARCHIVE_NAME"
-
-    log_info "Archive file cleaned up from pod"
+    log_info "${GREEN}✓ Archive ready for extraction${NC}"
     return 0
 }
 
 function restart_plex_pod() {
-    log_step "Restarting Plex pod..."
+    log_step "Restarting Plex pod to trigger extraction..."
 
     kubectl delete pod -n "$K8S_NAMESPACE" "$K8S_POD_NAME"
 
     log_info "Waiting for pod to restart..."
+    sleep 5
+
+    log_info "Checking init container logs..."
+    local max_wait=60
+    local elapsed=0
+    while [ $elapsed -lt $max_wait ]; do
+        local init_logs=$(kubectl logs -n "$K8S_NAMESPACE" "$K8S_POD_NAME" -c library-extractor 2>/dev/null || echo "")
+        if [ -n "$init_logs" ]; then
+            echo "$init_logs"
+            break
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+
+    log_info "Waiting for Plex pod to be ready..."
     kubectl wait --for=condition=Ready pod -n "$K8S_NAMESPACE" "$K8S_POD_NAME" --timeout=300s
 
-    log_info "${GREEN}✓ Plex pod restarted${NC}"
+    # Verify Library directory exists
+    local library_exists=$(kubectl exec -n "$K8S_NAMESPACE" "$K8S_POD_NAME" -- \
+        test -d "$K8S_CONFIG_DIR/Library" && echo "yes" || echo "no")
+
+    if [ "$library_exists" = "yes" ]; then
+        log_info "${GREEN}✓ Library directory verified in pod${NC}"
+    else
+        log_error "Library directory not found in pod after extraction"
+        return 1
+    fi
+
+    log_info "${GREEN}✓ Plex pod restarted and library migrated${NC}"
     return 0
 }
 
