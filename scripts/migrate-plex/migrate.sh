@@ -150,14 +150,21 @@ function prompt_stop_plex() {
     echo "Run this command on the source VM:"
     echo "  sudo systemctl stop plexmediaserver"
     echo ""
-    read -p "Have you stopped Plex on the source VM? (yes/no): " response
 
-    if [[ ! "$response" =~ ^[Yy]es$ ]]; then
-        log_error "Migration aborted - Plex must be stopped first"
-        return 1
+    # Check if running interactively or if SKIP_PROMPT is set
+    if [ -t 0 ] && [ -z "${SKIP_PROMPT:-}" ]; then
+        read -p "Have you stopped Plex on the source VM? (yes/no): " response
+        if [[ ! "$response" =~ ^[Yy]es$ ]]; then
+            log_error "Migration aborted - Plex must be stopped first"
+            return 1
+        fi
+        log_info "User confirmed Plex service stopped"
+    else
+        log_warn "Non-interactive mode - assuming Plex has been stopped"
+        log_info "Set SKIP_PROMPT=1 to suppress this check"
+        sleep 3
     fi
 
-    log_info "User confirmed Plex service stopped"
     return 0
 }
 

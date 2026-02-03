@@ -20,7 +20,6 @@ spec:
 
     # Environment variables for Plex configuration
     env:
-      ADVERTISE_IP: "https://plex.krebiehl.com:443"
       ALLOWED_NETWORKS: "172.21.10.0/24"
 
     # Use the "public" image tag - this tag downloads the latest Plex Server version during startup
@@ -120,6 +119,7 @@ spec:
     ingress:
       enabled: true
       ingressClassName: traefik
+      url: https://plex.krebiehl.com
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-production
         traefik.ingress.kubernetes.io/router.entrypoints: websecure
