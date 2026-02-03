@@ -21,7 +21,6 @@ spec:
     # Environment variables for Plex configuration
     extraEnv:
       ALLOWED_NETWORKS: "172.21.10.0/24"
-      LAN_NETWORKS: "172.21.10.0/16,172.20.0.0/16"
       TZ: "Etc/New_York"
 
     # Use the "public" image tag - this tag downloads the latest Plex Server version during startup
