@@ -19,8 +19,9 @@ spec:
     timezone: America/New_York
 
     # Environment variables for Plex configuration
-    env:
+    extraEnv:
       ALLOWED_NETWORKS: "172.21.10.0/24,172.20.6.0/24"
+      TZ: "Etc/New_York"
 
     # Use the "public" image tag - this tag downloads the latest Plex Server version during startup
     image:
