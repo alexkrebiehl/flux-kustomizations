@@ -18,6 +18,11 @@ spec:
     # Plex configuration
     timezone: America/New_York
 
+    # Environment variables for Plex configuration
+    env:
+      ADVERTISE_IP: "https://plex.krebiehl.com:443"
+      ALLOWED_NETWORKS: "172.21.10.0/24"
+
     # Use the "public" image tag - this tag downloads the latest Plex Server version during startup
     image:
       tag: public
