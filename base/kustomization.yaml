@@ -13,3 +13,4 @@ resources:
   - proxmox-csi-plugin-ks.yaml
   - wg-easy-ks.yaml
   - plex-ks.yaml
+  - kube-prometheus-stack-ks.yaml
