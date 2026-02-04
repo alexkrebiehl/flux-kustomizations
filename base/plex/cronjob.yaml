@@ -31,6 +31,7 @@ spec:
                 - /bin/sh
                 - -c
                 - |
+                  set -e
                   echo "Restarting Plex at $(date)"
                   kubectl rollout restart statefulset/plex-plex-media-server -n plex
-                  echo "Restart initiated successfully"
+                  echo "Restart completed successfully"

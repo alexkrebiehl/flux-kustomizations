@@ -9,6 +9,6 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
 rules:
   - apiGroups: ["apps"]
-    resources: ["deployments"]
+    resources: ["statefulsets"]
     verbs: ["get", "patch"]
-    resourceNames: ["plex"]
+    resourceNames: ["plex-plex-media-server"]
