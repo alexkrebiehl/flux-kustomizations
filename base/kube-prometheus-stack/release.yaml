@@ -100,17 +100,7 @@ spec:
       defaultDashboardsEnabled: true
       defaultDashboardsTimezone: America/New_York
 
-      # Prometheus datasource (auto-configured)
-      datasources:
-        datasources.yaml:
-          apiVersion: 1
-          datasources:
-            - name: Prometheus
-              type: prometheus
-              url: http://prometheus-kube-prometheus-prometheus:9090
-              access: proxy
-              isDefault: true
-              editable: true
+      # Prometheus datasource is auto-configured by the chart
 
     # kube-state-metrics (essential for cluster metrics)
     kubeStateMetrics:
