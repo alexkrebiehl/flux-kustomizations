@@ -15,8 +15,6 @@ spec:
         namespace: monitoring
       interval: 1h
   values:
-    fullnameOverride: prometheus
-
     # DISABLE for lightweight setup
     alertmanager:
       enabled: false
@@ -64,7 +62,7 @@ spec:
     grafana:
       enabled: true
 
-      adminPassword: changeme  # TODO: Change this!
+      adminPassword: changeme # TODO: Change this!
 
       # Configure sidecars to authenticate with Grafana
       sidecar:
@@ -113,8 +111,6 @@ spec:
       # Default K8s dashboards
       defaultDashboardsEnabled: true
       defaultDashboardsTimezone: America/New_York
-
-      # Prometheus datasource is auto-configured by the chart
 
     # kube-state-metrics (essential for cluster metrics)
     kubeStateMetrics:
