@@ -55,7 +55,7 @@ spec:
               memory: 128Mi
           livenessProbe:
             httpGet:
-              path: /pve
+              path: /pve?target=pve.krebiehl.com&module=default
               port: 9221
               scheme: HTTP
             initialDelaySeconds: 30
@@ -63,7 +63,7 @@ spec:
             timeoutSeconds: 10
           readinessProbe:
             httpGet:
-              path: /pve
+              path: /pve?target=pve.krebiehl.com&module=default
               port: 9221
               scheme: HTTP
             initialDelaySeconds: 10
