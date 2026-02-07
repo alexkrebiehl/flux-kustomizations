@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: prometheus-pve-exporter
+  namespace: monitoring
+  labels:
+    app: prometheus-pve-exporter
+    app.kubernetes.io/name: prometheus-pve-exporter
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: prometheus-pve-exporter
+  endpoints:
+    - port: metrics
+      interval: 60s
+      path: /pve
+      params:
+        target:
+          - pve.krebiehl.com
+        module:
+          - default

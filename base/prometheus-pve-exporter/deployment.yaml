@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-pve-exporter
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus-pve-exporter
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus-pve-exporter
+  template:
+    metadata:
+      labels:
+        app: prometheus-pve-exporter
+        app.kubernetes.io/name: prometheus-pve-exporter
+        app.kubernetes.io/component: monitoring
+        version: v3.8.0
+    spec:
+      containers:
+        - name: prometheus-pve-exporter
+          image: prompve/prometheus-pve-exporter:v3.8.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PVE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: proxmox-credentials
+                  key: PVE_USER
+            - name: PVE_TOKEN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: proxmox-credentials
+                  key: PVE_TOKEN_NAME
+            - name: PVE_TOKEN_VALUE
+              valueFrom:
+                secretKeyRef:
+                  name: proxmox-credentials
+                  key: PVE_TOKEN_VALUE
+            - name: PVE_VERIFY_SSL
+              value: "true"
+          ports:
+            - name: metrics
+              containerPort: 9221
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /pve
+              port: 9221
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /pve
+              port: 9221
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
