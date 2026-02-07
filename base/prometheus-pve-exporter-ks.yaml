@@ -9,7 +9,7 @@ spec:
   prune: true
   sourceRef:
     kind: GitRepository
-    name: flux-system
+    name: flux-kustomizations
   dependsOn:
     - name: kube-prometheus-stack
     - name: external-secrets
