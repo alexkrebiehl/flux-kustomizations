@@ -27,13 +27,14 @@ data:
     echo "Starting configuration patcher..."
     while kill -0 $WGEASY_PID 2>/dev/null; do
       if [ -f /etc/wireguard/wg0.conf ]; then
-        # Check if file contains iptables commands (needs patching)
-        if grep -q "^PostUp = iptables" /etc/wireguard/wg0.conf; then
-          echo "Detected iptables config, applying Talos compatibility patch..."
-          sed -i 's/^PostUp = iptables.*/PostUp = echo "WireGuard interface up"/' /etc/wireguard/wg0.conf
-          sed -i 's/^PostDown = iptables.*/PostDown = echo "WireGuard interface down"/' /etc/wireguard/wg0.conf
+        # Talos nodes lack the legacy ip_tables kernel module, so wg-easy's
+        # default iptables-based PostUp/PostDown fail and must be replaced
+        # with nft-based equivalents (Talos's native netfilter backend).
+        if ! grep -q "^PostUp = /scripts/wg-nat-up.sh" /etc/wireguard/wg0.conf; then
+          echo "Patching wg0.conf to use nft-based NAT..."
+          sed -i 's#^PostUp = .*#PostUp = /scripts/wg-nat-up.sh#' /etc/wireguard/wg0.conf
+          sed -i 's#^PostDown = .*#PostDown = /scripts/wg-nat-down.sh#' /etc/wireguard/wg0.conf
 
-          # Restart WireGuard interface with patched config
           echo "Restarting WireGuard interface..."
           wg-quick down wg0 2>/dev/null || true
           wg-quick up wg0 && echo "WireGuard interface started successfully"
@@ -44,3 +45,32 @@ data:
 
     # Wait for main process to exit
     wait $WGEASY_PID
+  wg-nat-up.sh: |
+    #!/bin/sh
+    # Sets up MASQUERADE for VPN clients using nft, since Talos nodes don't
+    # have the legacy ip_tables kernel module that wg-easy's default
+    # iptables-based PostUp relies on.
+    set -e
+
+    WG_SUBNET4="172.22.1.0/24"
+    WG_SUBNET6="fdcc:ad94:bacf:61a4::cafe:0/112"
+    OIF="eth0"
+
+    sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null 2>&1 || true
+
+    nft add table ip wg_nat 2>/dev/null || true
+    nft -- add chain ip wg_nat postrouting { type nat hook postrouting priority 100 \; } 2>/dev/null || true
+    nft flush chain ip wg_nat postrouting
+    nft add rule ip wg_nat postrouting ip saddr "$WG_SUBNET4" oifname "$OIF" masquerade
+
+    nft add table ip6 wg_nat6 2>/dev/null || true
+    nft -- add chain ip6 wg_nat6 postrouting { type nat hook postrouting priority 100 \; } 2>/dev/null || true
+    nft flush chain ip6 wg_nat6 postrouting
+    nft add rule ip6 wg_nat6 postrouting ip6 saddr "$WG_SUBNET6" oifname "$OIF" masquerade
+
+    echo "wg-nat: masquerade rules applied"
+  wg-nat-down.sh: |
+    #!/bin/sh
+    nft delete table ip wg_nat 2>/dev/null || true
+    nft delete table ip6 wg_nat6 2>/dev/null || true
+    echo "wg-nat: masquerade rules removed"

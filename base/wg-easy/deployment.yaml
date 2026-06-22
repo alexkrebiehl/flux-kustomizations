@@ -37,9 +37,9 @@ spec:
             - name: WG_DEFAULT_DNS
               value: "172.21.21.21"
             - name: WG_POST_UP
-              value: "echo 'WireGuard interface up - iptables/nftables managed by Kubernetes'"
+              value: "/scripts/wg-nat-up.sh"
             - name: WG_POST_DOWN
-              value: "echo 'WireGuard interface down'"
+              value: "/scripts/wg-nat-down.sh"
           # Optional: Uncomment to set web UI password
           # - name: PASSWORD
           #   value: "your-secure-password"
