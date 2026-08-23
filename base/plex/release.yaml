@@ -5,6 +5,20 @@ metadata:
   namespace: plex
 spec:
   interval: 15m
+  # Helm's 5m default is too short for this release: the pod pulls the Plex server
+  # binary at startup (image tag "public") and the init container can be doing
+  # library work, so an upgrade legitimately outruns it. That is what failed on
+  # 2026-02-03 with "context deadline exceeded", and with no remediation configured
+  # Flux retried zero times and stalled permanently - leaving the LAN_NETWORKS
+  # removal unapplied for months while Plex itself carried on running fine.
+  timeout: 15m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
   chart:
     spec:
       chart: plex-media-server
