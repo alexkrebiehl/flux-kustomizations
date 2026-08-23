@@ -9,8 +9,12 @@ spec:
   # binary at startup (image tag "public") and the init container can be doing
   # library work, so an upgrade legitimately outruns it. That is what failed on
   # 2026-02-03 with "context deadline exceeded", and with no remediation configured
-  # Flux retried zero times and stalled permanently - leaving the LAN_NETWORKS
-  # removal unapplied for months while Plex itself carried on running fine.
+  # Flux retried zero times and stalled permanently.
+  #
+  # Helm had already applied that upgrade's manifests before it timed out waiting
+  # for readiness, so the cluster was in the right state throughout - only the
+  # release record said otherwise. The real cost was that a stalled HelmRelease
+  # applies nothing further, so Plex was frozen against any later change.
   timeout: 15m
   install:
     remediation:
