@@ -1,0 +1,24 @@
+# Gateway API CRDs, owned here rather than by the Traefik chart.
+#
+# The Traefik chart ships its own copy of the Gateway API CRDs under crds/
+# (v1.1.0 in chart 32.1.1, v1.4.0 in 39.x). Helm never updates files in a
+# chart's crds/ directory on upgrade, so this Kustomization applies last and
+# keeps the cluster on the version OpenChoreo and kgateway are built against.
+#
+# Do NOT set upgrade.crds on the Traefik HelmRelease: it would make Traefik
+# reassert its own (older) Gateway API CRDs on every chart bump.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: gateway-api
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./base/gateway-api
+  prune: true
+  force: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-kustomizations
+  dependsOn:
+    - name: traefik
