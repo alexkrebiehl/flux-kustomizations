@@ -17,7 +17,8 @@ spec:
   values:
     installCRDs: true
     crds:
-      # Transitional: keeps the deprecated v1beta1 API served so the upgrade from
-      # 0.9.11 is not ordering-sensitive against the manifest rewrites to v1.
-      # Remove once every ExternalSecret/ClusterSecretStore is confirmed on v1.
-      unsafeServeV1Beta1: true
+      # Every ExternalSecret and ClusterSecretStore in both repos is on v1 and
+      # confirmed synced, so the deprecated API no longer needs to be served.
+      # Note the CRDs still declare v1beta1 (unserved) and status.storedVersions
+      # still lists it, so objects written before the migration remain readable.
+      unsafeServeV1Beta1: false
