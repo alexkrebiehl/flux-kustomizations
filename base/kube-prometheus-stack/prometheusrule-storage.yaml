@@ -1,0 +1,64 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: storage
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/managed-by: kustomize
+    # Load-bearing. prometheusSpec sets no ruleSelector, so the operator
+    # defaults to matching release=kube-prometheus-stack. Without this label the
+    # rule applies cleanly and is silently never loaded.
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: proxmox-csi
+      rules:
+        # Kubernetes cannot detect this on its own. external-attacher verifies
+        # attachments via the driver's ListVolumes with
+        # LIST_VOLUMES_PUBLISHED_NODES; the Proxmox CSI driver implements
+        # neither (Unimplemented in v0.17.1 and v0.20.0 alike), so a
+        # VolumeAttachment reading attached=true with no backing disk is a
+        # permanent, silent lie. On 2026-09-06 a host reboot left 19 volumes in
+        # that state; three pods crash-looped and sixteen kept running on dead
+        # mounts, which is what makes this worth alerting on rather than
+        # waiting to notice.
+        - alert: CSIVolumeMountDead
+          # A pod references this PVC, but the kubelet cannot stat the volume.
+          # Keyed off the pod-reference metric rather than
+          # kube_persistentvolumeclaim_info so a Bound-but-unused PVC does not
+          # fire.
+          expr: >-
+            count by (namespace, persistentvolumeclaim) (kube_pod_spec_volumes_persistentvolumeclaims_info)
+            unless on (namespace, persistentvolumeclaim) kubelet_volume_stats_capacity_bytes
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is mounted but unreadable"
+            description: >-
+              The kubelet cannot stat this volume, so its VolumeAttachment is
+              almost certainly stale: Kubernetes thinks the disk is attached but
+              Proxmox has detached it. Nothing will repair this on its own.
+              Run scripts/csi-reconcile.sh in the talos-clusters repo to see the
+              drift, then --apply to repair it. If pods still fail to mount
+              afterwards, the disks came back under different device names and
+              the node needs a reboot.
+
+        # Coarse tripwire for the same failure, catching cases the per-PVC rule
+        # misses -- a volume with no running pod, or drift that appears before
+        # any workload touches it.
+        - alert: CSIVolumeAttachmentDrift
+          expr: >-
+            count(kube_volumeattachment_status_attached)
+            != count(count by (namespace, persistentvolumeclaim) (kubelet_volume_stats_capacity_bytes))
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "VolumeAttachment count does not match mounted volume count"
+            description: >-
+              Kubernetes reports {{ $value }} more attached volumes than the
+              kubelets can actually see. Usually stale attachments left by an
+              ungraceful node stop. Run scripts/csi-reconcile.sh to confirm.
