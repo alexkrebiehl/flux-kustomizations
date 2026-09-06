@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ntfy-config
+  namespace: ntfy
+  labels:
+    app.kubernetes.io/name: ntfy
+    app.kubernetes.io/component: notifications
+    app.kubernetes.io/managed-by: kustomize
+data:
+  server.yml: |
+    base-url: "https://ntfy.krebiehl.com"
+    listen-http: ":8080"
+    cache-file: "/var/lib/ntfy/cache.db"
+    cache-duration: "72h"
+    behind-proxy: true
+
+    # Forwards poll_request messages via ntfy.sh so iOS/APNs wakes the app,
+    # which then fetches the message body from this server. Harmless on Android.
+    upstream-base-url: "https://ntfy.sh"

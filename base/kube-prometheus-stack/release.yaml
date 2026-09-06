@@ -16,10 +16,91 @@ spec:
       interval: 1h
   values:
     # DISABLE for lightweight setup
-    alertmanager:
-      enabled: false
     nodeExporter:
       enabled: false
+
+    # Alertmanager -> self-hosted ntfy (base/ntfy)
+    alertmanager:
+      enabled: true
+
+      ingress:
+        enabled: true
+        ingressClassName: traefik
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-production
+          traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        hosts:
+          - alertmanager.krebiehl.com
+        paths:
+          - /
+        tls:
+          - secretName: alertmanager-tls
+            hosts:
+              - alertmanager.krebiehl.com
+
+      alertmanagerSpec:
+        # Without this the chart derives "http://alertmanager.krebiehl.com/" from the
+        # ingress host, which breaks silence links behind Traefik's TLS termination.
+        externalUrl: "https://alertmanager.krebiehl.com"
+        retention: 120h
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        storage:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: proxmox-zpool
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 2Gi
+
+      config:
+        global:
+          resolve_timeout: 5m
+        route:
+          group_by: ["alertname", "namespace"]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 12h
+          receiver: ntfy
+          routes:
+            # Watchdog fires continuously by design as a dead-man's switch; drop it.
+            - receiver: "null"
+              matchers:
+                - alertname = "Watchdog"
+            - receiver: "null"
+              matchers:
+                - alertname = "InfoInhibitor"
+            - receiver: ntfy-critical
+              matchers:
+                - severity = "critical"
+              repeat_interval: 4h
+        inhibit_rules:
+          - source_matchers:
+              - severity = "critical"
+            target_matchers:
+              - severity = "warning"
+            equal: ["alertname", "namespace"]
+        receivers:
+          - name: "null"
+          # ntfy renders these with its built-in "alertmanager" template.
+          # max_alerts caps the payload: ntfy hard-limits a message to 4096 bytes
+          # and rejects anything larger with a 400.
+          - name: ntfy
+            webhook_configs:
+              - url: "http://ntfy.ntfy.svc.cluster.local/homelab-alerts?template=alertmanager&priority=default&tags=warning"
+                send_resolved: true
+                max_alerts: 5
+          - name: ntfy-critical
+            webhook_configs:
+              - url: "http://ntfy.ntfy.svc.cluster.local/homelab-alerts?template=alertmanager&priority=high&tags=rotating_light"
+                send_resolved: true
+                max_alerts: 5
 
     # Prometheus configuration
     prometheus:
@@ -138,7 +219,7 @@ spec:
     defaultRules:
       create: true
       rules:
-        alertmanager: false
+        alertmanager: true
         etcd: false
         configReloaders: false
         general: true
