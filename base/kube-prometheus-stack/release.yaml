@@ -19,6 +19,20 @@ spec:
     nodeExporter:
       enabled: false
 
+    # Talos does not expose these control-plane components for scraping, so the
+    # chart's Services/ServiceMonitors for them can never succeed. Left enabled
+    # they produce 10 permanently-down targets, which makes TargetDown fire
+    # forever. Disabling the scrape config is the fix; the matching defaultRules
+    # groups are already off below.
+    kubeControllerManager:
+      enabled: false
+    kubeScheduler:
+      enabled: false
+    kubeProxy:
+      enabled: false
+    kubeEtcd:
+      enabled: false
+
     # Alertmanager -> self-hosted ntfy (base/ntfy)
     alertmanager:
       enabled: true
