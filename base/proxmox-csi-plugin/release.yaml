@@ -29,12 +29,26 @@ spec:
     # it can only run on worker nodes -- the very nodes whose volumes it is
     # responsible for detaching. Draining the worker therefore evicts the
     # controller that would have performed the detach, and with a single-worker
-    # cluster there is nowhere else for it to go. This does not pin it to a
-    # control plane, it just makes one eligible when the worker is unavailable.
-    # ~120Mi in practice, which the control planes have room for.
+    # cluster there is nowhere else for it to go. This makes a control plane
+    # eligible; the affinity below keeps it from being the default choice.
     tolerations:
       - key: node-role.kubernetes.io/control-plane
         effect: NoSchedule
+
+    # Eligible != preferred. With only the toleration the scheduler put the
+    # controller on cp-1, which runs at ~97% of its 2340Mi allocatable
+    # (kube-apiserver alone is ~1.4Gi and has no limit) -- the worst node in the
+    # cluster to add a pod to. A worker is the right home; a control plane is
+    # the fallback for when no worker is schedulable, which is the whole point
+    # of the toleration. Preferred, not required, so the fallback still works.
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+                - key: node-role.kubernetes.io/control-plane
+                  operator: DoesNotExist
 
     storageClass:
       - name: proxmox-zpool
