@@ -102,17 +102,24 @@ spec:
             equal: ["alertname", "namespace"]
         receivers:
           - name: "null"
-          # ntfy renders these with its built-in "alertmanager" template.
-          # max_alerts caps the payload: ntfy hard-limits a message to 4096 bytes
-          # and rejects anything larger with a 400.
+          # ntfy renders these with the "alertmanager" template overridden in
+          # base/ntfy/templates-configmap.yaml.
+          #
+          # Notification priority is NOT set here: ntfy ignores the ?priority=
+          # query param whenever a named template is used, so the template
+          # derives priority from the alert's severity label instead. The two
+          # receivers differ only in repeat_interval and tags.
+          #
+          # max_alerts caps the payload: ntfy hard-limits a message to 4096
+          # bytes and rejects anything larger with a 400.
           - name: ntfy
             webhook_configs:
-              - url: "http://ntfy.ntfy.svc.cluster.local/homelab-alerts?template=alertmanager&priority=default&tags=warning"
+              - url: "http://ntfy.ntfy.svc.cluster.local/homelab-alerts?template=alertmanager&tags=warning"
                 send_resolved: true
                 max_alerts: 5
           - name: ntfy-critical
             webhook_configs:
-              - url: "http://ntfy.ntfy.svc.cluster.local/homelab-alerts?template=alertmanager&priority=high&tags=rotating_light"
+              - url: "http://ntfy.ntfy.svc.cluster.local/homelab-alerts?template=alertmanager&tags=rotating_light"
                 send_resolved: true
                 max_alerts: 5
 

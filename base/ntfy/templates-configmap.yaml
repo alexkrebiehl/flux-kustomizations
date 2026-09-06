@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ntfy-templates
+  namespace: ntfy
+  labels:
+    app.kubernetes.io/name: ntfy
+    app.kubernetes.io/component: notifications
+    app.kubernetes.io/managed-by: kustomize
+data:
+  # Overrides ntfy's embedded "alertmanager" template (ntfy reads $TEMPLATE_DIR
+  # first, falling back to the embedded copy). Two reasons this override exists:
+  #
+  #  1. Priority. In file-mode templating ntfy never passes the ?priority= query
+  #     param through (server_template.go: renderTemplateFromFile takes no
+  #     priorityStr), so priority can ONLY come from the template file. Deriving
+  #     it from severity here is what makes critical alerts break through.
+  #  2. The embedded template emits "Starts at: <ts>Ends at: <ts>" with no
+  #     newline between them, and prints "<no value>" for absent labels.
+  alertmanager.yml: |
+    title: |
+      {{- if eq .status "firing" }}
+      🚨 {{ (first .alerts).labels.alertname }}
+      {{- else if eq .status "resolved" }}
+      ✅ Resolved: {{ (first .alerts).labels.alertname }}
+      {{- else }}
+      {{ fail "Unsupported Alertmanager status." }}
+      {{- end }}
+    priority: '{{ $sev := ((first .alerts).labels.severity | default "") }}{{ if eq .status "resolved" }}2{{ else if eq $sev "critical" }}5{{ else if eq $sev "warning" }}3{{ else }}2{{ end }}'
+    message: |
+      {{- range .alerts }}
+      {{ .labels.alertname }}{{ with .labels.severity }} [{{ . }}]{{ end }}
+      {{- with .annotations.summary }}
+      {{ . }}
+      {{- end }}
+      {{- with .annotations.description }}
+      {{ . }}
+      {{- end }}
+      {{- with .labels.namespace }}
+      namespace: {{ . }}
+      {{- end }}
+      {{- with .labels.instance }}
+      instance: {{ . }}
+      {{- end }}
+      since: {{ .startsAt }}
+      {{ end }}
