@@ -36,18 +36,27 @@ data:
     # the file later, the next pass re-patches it.
     echo "Starting configuration patcher..."
     while kill -0 $WGEASY_PID 2>/dev/null; do
-      if [ -f /etc/wireguard/wg0.conf ] && \
-         ! grep -q "^PostUp = /scripts/wg-nat-up.sh" /etc/wireguard/wg0.conf; then
-        echo "Patching wg0.conf to use nft-based NAT..."
-        sed -i 's#^PostUp = .*#PostUp = /scripts/wg-nat-up.sh#' /etc/wireguard/wg0.conf
-        sed -i 's#^PostDown = .*#PostDown = /scripts/wg-nat-down.sh#' /etc/wireguard/wg0.conf
+      if [ -f /etc/wireguard/wg0.conf ]; then
+        if ! grep -q "^PostUp = /scripts/wg-nat-up.sh" /etc/wireguard/wg0.conf; then
+          echo "Patching wg0.conf to use nft-based NAT..."
+          sed -i 's#^PostUp = .*#PostUp = /scripts/wg-nat-up.sh#' /etc/wireguard/wg0.conf
+          sed -i 's#^PostDown = .*#PostDown = /scripts/wg-nat-down.sh#' /etc/wireguard/wg0.conf
+          # Drop the interface so it is recreated from the patched config.
+          wg-quick down wg0 2>/dev/null || true
+        fi
 
-        echo "Restarting WireGuard interface..."
-        wg-quick down wg0 2>/dev/null || true
-        if wg-quick up wg0; then
-          echo "WireGuard interface started successfully"
-        else
-          echo "wg-quick up failed; retrying on next pass" >&2
+        # Bringing the interface up is deliberately NOT tied to having just
+        # patched. wg0.conf persists on the volume, so after a restart it can
+        # already carry the nft hooks -- nothing to patch, yet the interface
+        # still has to be started. Keying "up" off "did we patch" meant that
+        # case left wg0 missing with the pod reporting healthy.
+        if ! ip link show wg0 >/dev/null 2>&1; then
+          echo "Bringing up wg0..."
+          if wg-quick up wg0; then
+            echo "WireGuard interface started successfully"
+          else
+            echo "wg-quick up failed; retrying on next pass" >&2
+          fi
         fi
       fi
       sleep 2
