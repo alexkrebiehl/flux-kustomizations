@@ -22,6 +22,20 @@ spec:
           token_secret: "${proxmoxTokenSecret}"
           region: "${proxmoxRegion}"
 
+    # Tolerations for the CONTROLLER (the chart's top-level key; the node
+    # DaemonSet is configured separately).
+    #
+    # The controller is a single replica and by default tolerates nothing, so
+    # it can only run on worker nodes -- the very nodes whose volumes it is
+    # responsible for detaching. Draining the worker therefore evicts the
+    # controller that would have performed the detach, and with a single-worker
+    # cluster there is nowhere else for it to go. This does not pin it to a
+    # control plane, it just makes one eligible when the worker is unavailable.
+    # ~120Mi in practice, which the control planes have room for.
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        effect: NoSchedule
+
     storageClass:
       - name: proxmox-zpool
         storage: zpool
