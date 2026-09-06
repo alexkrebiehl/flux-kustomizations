@@ -14,33 +14,43 @@ data:
 
     echo "Starting wg-easy with Talos Linux compatibility..."
 
-    # Start wg-easy in background
-    node server/index.mjs &
+    # Talos nodes lack the legacy ip_tables kernel module, so wg-easy's
+    # default iptables-based PostUp/PostDown fail and must be replaced with
+    # nft-based equivalents (Talos's native netfilter backend). wg-easy writes
+    # wg0.conf itself, from its database, on every start -- so the patch cannot
+    # be baked into the volume and has to be re-applied each boot.
+    #
+    # --unhandled-rejections=warn is load-bearing. wg-easy runs `wg-quick up`
+    # during startup; on Talos that exits non-zero and surfaces as an unhandled
+    # promise rejection, which Node terminates the process for by default. That
+    # killed wg-easy ~0.1s in, before the patcher below could run, so the
+    # workaround never applied and the container crash-looped. Downgrading it
+    # to a warning lets wg-easy survive its own failed attempt and keeps it
+    # alive for the patcher to fix the config and bring the interface up.
+    node --unhandled-rejections=warn server/index.mjs &
     WGEASY_PID=$!
 
-    # Wait for wg-easy to fully initialize and fail to start WireGuard
-    # This ensures wg0.conf is in its final state before we patch it
-    echo "Waiting for wg-easy initialization to complete..."
-    sleep 10
-
-    # Monitor and patch wg0.conf whenever it changes
+    # Poll rather than sleeping a fixed interval before starting: the previous
+    # version waited 10s and assumed wg0.conf had settled, which raced against
+    # wg-easy's own startup. Polling is self-correcting -- if wg-easy rewrites
+    # the file later, the next pass re-patches it.
     echo "Starting configuration patcher..."
     while kill -0 $WGEASY_PID 2>/dev/null; do
-      if [ -f /etc/wireguard/wg0.conf ]; then
-        # Talos nodes lack the legacy ip_tables kernel module, so wg-easy's
-        # default iptables-based PostUp/PostDown fail and must be replaced
-        # with nft-based equivalents (Talos's native netfilter backend).
-        if ! grep -q "^PostUp = /scripts/wg-nat-up.sh" /etc/wireguard/wg0.conf; then
-          echo "Patching wg0.conf to use nft-based NAT..."
-          sed -i 's#^PostUp = .*#PostUp = /scripts/wg-nat-up.sh#' /etc/wireguard/wg0.conf
-          sed -i 's#^PostDown = .*#PostDown = /scripts/wg-nat-down.sh#' /etc/wireguard/wg0.conf
+      if [ -f /etc/wireguard/wg0.conf ] && \
+         ! grep -q "^PostUp = /scripts/wg-nat-up.sh" /etc/wireguard/wg0.conf; then
+        echo "Patching wg0.conf to use nft-based NAT..."
+        sed -i 's#^PostUp = .*#PostUp = /scripts/wg-nat-up.sh#' /etc/wireguard/wg0.conf
+        sed -i 's#^PostDown = .*#PostDown = /scripts/wg-nat-down.sh#' /etc/wireguard/wg0.conf
 
-          echo "Restarting WireGuard interface..."
-          wg-quick down wg0 2>/dev/null || true
-          wg-quick up wg0 && echo "WireGuard interface started successfully"
+        echo "Restarting WireGuard interface..."
+        wg-quick down wg0 2>/dev/null || true
+        if wg-quick up wg0; then
+          echo "WireGuard interface started successfully"
+        else
+          echo "wg-quick up failed; retrying on next pass" >&2
         fi
       fi
-      sleep 5
+      sleep 2
     done
 
     # Wait for main process to exit
