@@ -116,14 +116,17 @@ anywhere in `plexmediaserver_*_amd64.deb`. So the image comes from
 [alexkrebiehl/plex-amd](https://github.com/alexkrebiehl/plex-amd), which adds Mesa's `radeonsi`
 driver under `/vaapi-amdgpu` and points `LIBVA_DRIVERS_PATH` at it.
 
-That image also ships a musl loader and wraps `Plex Transcoder` to run under it, because Plex's own
-musl 1.2.2 segfaults while loading this Mesa. The wrapper is reapplied on every container start,
-since Plex reinstalls itself over `/usr/lib/plexmediaserver` each time. If hardware transcoding ever
-stops working, the first thing to check is that the wrap happened:
+That image also ships a newer musl and replaces Plex's bundled copy at every container start,
+because Plex's own musl 1.2.2 cannot load this Mesa. It has to cover all of Plex, not just the
+transcoder: `Plex Media Server` links libavcodec directly and probes VAAPI in-process to decide
+whether hardware transcoding is available at all. The swap is reapplied every start, since Plex
+reinstalls itself over `/usr/lib/plexmediaserver` each time.
+
+If hardware transcoding ever stops working, check that the swap happened:
 
 ```bash
 kubectl -n plex logs plex-plex-media-server-0 | grep vaapi
-# expect: [vaapi] transcoder wrapped to run under ld-musl-x86_64.so.1 from the payload
+# expect: [vaapi] replaced Plex's musl with musl 1.2.5 (2 file(s))
 ```
 
 The plex-amd repo documents the full diagnosis.
@@ -150,8 +153,20 @@ rm -f /tmp/in.nv12'
 ```
 
 Expect `frame=   30` and no `Failed to initialise VAAPI` or `va_openDriver() returns -1`. Add
-`LIBVA_MESSAGING_LEVEL=2` to see libva's driver search. End to end, play something that forces a
-transcode and confirm the Plex dashboard shows `(hw)` on the session.
+`LIBVA_MESSAGING_LEVEL=2` to see libva's driver search.
+
+That only proves the transcoder can. What Plex actually *decided* is in its own log, and this is the
+authoritative check - play something that forces a transcode, then:
+
+```bash
+kubectl -n plex exec plex-plex-media-server-0 -- \
+  grep -a "Reached Decision" \
+  "/config/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log" | tail -1
+```
+
+Want `encoder=h264_vaapi`. A plain `encoder=h264`, or a nearby
+`hardware transcoding: enabled, but no hardware decode accelerator found`, means Plex probed the GPU
+and turned it down. The dashboard shows `(hw)` on the session when it worked.
 
 ## Resource limits
 
