@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: generic-device-plugin
+  namespace: generic-device-plugin
+  labels:
+    app.kubernetes.io/name: generic-device-plugin
+    app.kubernetes.io/component: device-plugin
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: generic-device-plugin
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: generic-device-plugin
+        app.kubernetes.io/component: device-plugin
+        version: 0.2.0
+    spec:
+      # Only one node has an iGPU. The plugin is harmless elsewhere (it would
+      # advertise zero devices), but running a privileged pod on every node to
+      # advertise nothing is not worth the attack surface. A second AMD GPU pool
+      # would carry the same label and be picked up automatically.
+      nodeSelector:
+        node.krebiehl.com/gpu: amd
+      # No tolerations: the GPU node is deliberately untainted (tainting it once
+      # evicted proxmox-csi-plugin-node and metallb-speaker - see the Gotchas
+      # section of talos-clusters/README.md), and the DaemonSet controller adds
+      # the not-ready/unreachable tolerations by itself.
+      priorityClassName: system-node-critical
+      containers:
+        - name: generic-device-plugin
+          image: docker.io/squat/generic-device-plugin:0.2.0
+          imagePullPolicy: IfNotPresent
+          args:
+            # Explicit rather than relying on the default, so the resource name
+            # consumers request cannot drift underneath us on an image bump.
+            - --domain=devic.es
+            - --device
+            - |
+              name: dri
+              groups:
+                # count is how many pods may hold this group concurrently. The
+                # render node is genuinely shareable - the kernel driver
+                # arbitrates - so this is a sharing limit, not a hardware one.
+                - count: 10
+                  paths:
+                    # renderD128 only. card0 is 0600 and is for modesetting;
+                    # VAAPI encode/decode needs just the render node.
+                    - path: /dev/dri/renderD128
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 10Mi
+            limits:
+              cpu: 50m
+              memory: 20Mi
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+            - name: dev
+              mountPath: /dev
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+        - name: dev
+          hostPath:
+            path: /dev
