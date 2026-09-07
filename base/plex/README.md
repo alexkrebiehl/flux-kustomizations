@@ -6,6 +6,8 @@ Plex Media Server deployment on Kubernetes using the official Helm chart.
 
 This deployment uses:
 - **Helm Chart**: Official Plex Media Server chart from plexinc
+- **Image**: [`ghcr.io/alexkrebiehl/plex-amd`](https://github.com/alexkrebiehl/plex-amd) - the
+  official image plus Mesa's AMD VAAPI driver (see [Hardware transcoding](#hardware-transcoding))
 - **Storage**: 150Gi PVC on proxmox-zpool storage class
 - **NFS Mounts**:
   - `/media/library` - Read-only media library (diskstation.krebiehl.com:/volume1/plex)
@@ -98,6 +100,54 @@ A CronJob restarts Plex daily at 5 AM Eastern to apply updates and clear caches:
 kubectl get cronjob -n plex plex-restart
 ```
 
+## Hardware transcoding
+
+Plex transcodes on the AMD iGPU in `talos-cluster-gpu-1`. Two separate things had to be solved:
+
+**The device.** A `hostPath` mount of `/dev/dri` does not work - it makes the device node visible
+but not accessible, because a bind-mounted device is not on the container's device cgroup
+allowlist. The render node arrives instead through
+[`generic-device-plugin`](../generic-device-plugin/README.md) as the extended resource
+`devic.es/dri`, requested under `pms.resources.limits`. That request is also what schedules Plex
+onto the GPU node - it is the only node advertising the resource - so no `nodeSelector` is needed.
+
+**The driver.** The official Plex image contains no VA driver at all: there is no `*_drv_video.so`
+anywhere in `plexmediaserver_*_amd64.deb`. So the image comes from
+[alexkrebiehl/plex-amd](https://github.com/alexkrebiehl/plex-amd), which adds Mesa's `radeonsi`
+driver under `/vaapi-amdgpu` and points `LIBVA_DRIVERS_PATH` at it. That repo documents the musl
+version gap this required working around.
+
+### Enabling it
+
+Hardware transcoding is a server setting, not a container setting. In the Plex UI:
+**Settings -> Transcoder -> "Use hardware acceleration when available"** (requires Plex Pass).
+Nothing in Git can turn this on.
+
+### Verifying it
+
+```bash
+kubectl -n plex exec plex-plex-media-server-0 -- \
+  /usr/lib/plexmediaserver/Plex\ Transcoder -hide_banner \
+    -init_hw_device vaapi=hw:/dev/dri/renderD128 -filter_hw_device hw \
+    -f lavfi -i testsrc=size=1280x720:rate=30 -t 2 \
+    -vf format=nv12,hwupload -c:v h264_vaapi -f null -
+```
+
+Expect frames encoded, and no `Failed to initialise VAAPI` or `va_openDriver() returns -1`. Add
+`LIBVA_MESSAGING_LEVEL=2` to see libva's driver search. End to end, play something that forces a
+transcode and confirm the Plex dashboard shows `(hw)` on the session.
+
+## Resource limits
+
+`pms.resources` deliberately sets **no CPU limit**. The constitution asks for requests and limits on
+every workload, but CFS throttling mid-transcode is directly audible as playback stutter, and this
+is the one workload where that trade is not worth making. Requests are set so the scheduler still
+accounts for Plex properly.
+
+Note that these values must live under `pms:` - the chart reads `.Values.pms.resources`. They sat at
+the top level of `values` from initial deployment until 2026-09-07, where the chart never looked, so
+the StatefulSet ran with `resources: {}` that whole time.
+
 ## Storage
 
 The deployment uses a 150Gi PVC for Plex configuration and metadata:
@@ -148,11 +198,19 @@ To rollback to source server:
 
 ### Update Plex Version
 
-The deployment uses the `public` image tag, which downloads the latest version on startup. To update:
+Plex updates itself. The image is built `FROM plexinc/pms-docker:public`, which carries no Plex
+binary; its `50-plex-update` init script reads `version=public` from `/version.txt` and installs the
+newest public release at every container start. The daily `plex-restart` CronJob turns that into
+daily updates. To update immediately:
 
 ```bash
 kubectl delete pod -n plex plex-plex-media-server-0
 ```
+
+The custom image does not change this - it adds only `/vaapi-amdgpu` and never touches
+`/usr/lib/plexmediaserver` or `/version.txt`. To update the *driver* side instead, push to
+[plex-amd](https://github.com/alexkrebiehl/plex-amd); CI republishes `:latest` and the nightly
+restart picks it up (`pullPolicy: Always`).
 
 ### Manual Restart
 
