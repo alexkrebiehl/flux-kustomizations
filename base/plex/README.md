@@ -6,8 +6,6 @@ Plex Media Server deployment on Kubernetes using the official Helm chart.
 
 This deployment uses:
 - **Helm Chart**: Official Plex Media Server chart from plexinc
-- **Image**: [`ghcr.io/alexkrebiehl/plex-amd`](https://github.com/alexkrebiehl/plex-amd) - the
-  official image plus Mesa's AMD VAAPI driver (see [Hardware transcoding](#hardware-transcoding))
 - **Storage**: 150Gi PVC on proxmox-zpool storage class
 - **NFS Mounts**:
   - `/media/library` - Read-only media library (diskstation.krebiehl.com:/volume1/plex)
@@ -100,73 +98,80 @@ A CronJob restarts Plex daily at 5 AM Eastern to apply updates and clear caches:
 kubectl get cronjob -n plex plex-restart
 ```
 
-## Hardware transcoding
+## Hardware transcoding (not working - transcodes run on the CPU)
 
-Plex transcodes on the AMD iGPU in `talos-cluster-gpu-1`. Two separate things had to be solved:
+The GPU is present and functional, but **Plex cannot use it**, and this deployment no longer tries.
 
-**The device.** A `hostPath` mount of `/dev/dri` does not work - it makes the device node visible
-but not accessible, because a bind-mounted device is not on the container's device cgroup
-allowlist. The render node arrives instead through
-[`generic-device-plugin`](../generic-device-plugin/README.md) as the extended resource
-`devic.es/dri`, requested under `pms.resources.limits`. That request is also what schedules Plex
-onto the GPU node - it is the only node advertising the resource - so no `nodeSelector` is needed.
+Plex's transcoder segfaults whenever `-copyts` is combined with `h264_vaapi`, and Plex sends
+`-copyts` on every segmented streaming session. What you see is: Plex decides on hardware, starts the
+job, the job dies in Plex's own bundled ffmpeg within about half a second, and Plex silently re-plans
+without hardware. The dashboard shows a plain "Transcode" with no `(hw)`, and CPU use is high.
 
-**The driver.** The official Plex image contains no VA driver at all: there is no `*_drv_video.so`
-anywhere in `plexmediaserver_*_amd64.deb`. So the image comes from
-[alexkrebiehl/plex-amd](https://github.com/alexkrebiehl/plex-amd), which adds Mesa's `radeonsi`
-driver under `/vaapi-amdgpu` and points `LIBVA_DRIVERS_PATH` at it.
+It is a Plex bug, not a configuration problem here. It reproduces with Plex's own downloaded VA
+driver and on a completely unmodified image. Full diagnosis and a minimal reproduction:
+[PLEX-BUG-REPORT.md](https://github.com/alexkrebiehl/plex-amd/blob/main/PLEX-BUG-REPORT.md).
 
-That image also ships a newer musl and replaces Plex's bundled copy at every container start,
-because Plex's own musl 1.2.2 cannot load this Mesa. It has to cover all of Plex, not just the
-transcoder: `Plex Media Server` links libavcodec directly and probes VAAPI in-process to decide
-whether hardware transcoding is available at all. The swap is reapplied every start, since Plex
-reinstalls itself over `/usr/lib/plexmediaserver` each time.
+The GPU itself is fine - without `-copyts`, the same pipeline hardware-encodes at every resolution up
+to 4K.
 
-If hardware transcoding ever stops working, check that the swap happened:
+### Why the stock image, and why no device request
 
-```bash
-kubectl -n plex logs plex-plex-media-server-0 | grep vaapi
-# expect: [vaapi] replaced Plex's musl with musl 1.2.5 (2 file(s))
-```
+An earlier attempt ran a custom image ([alexkrebiehl/plex-amd](https://github.com/alexkrebiehl/plex-amd))
+that added Mesa's VAAPI driver, on the premise that Plex ships none. Two things made that a dead end:
 
-The plex-amd repo documents the full diagnosis.
+- **Plex 1.43 downloads its own AMD driver** into `Cache/va-dri-linux-x86_64` and overrides
+  `LIBVA_DRIVERS_PATH` when launching the transcoder. The bundled Mesa only ever fed Plex Media
+  Server's in-process capability probe.
+- **Making that probe succeed made things worse.** Plex then attempts hardware, crashes, and falls
+  back - so every playback start costs a crashed process and ~0.5 s. With the stock image the probe
+  finds no driver, Plex goes straight to software, and playback starts cleanly.
 
-### Enabling it
+So `devic.es/dri` is no longer requested either: with no usable hardware path it would only pin
+scheduling for nothing. Re-enabling is a small diff (`image`, the resource limit, and the
+`generic-device-plugin` entry in `plex-ks.yaml`) if the Plex crash is ever fixed.
 
-Hardware transcoding is a server setting, not a container setting. In the Plex UI:
-**Settings -> Transcoder -> "Use hardware acceleration when available"** (requires Plex Pass).
-Nothing in Git can turn this on.
+`generic-device-plugin` stays deployed - it is cluster-wide and other workloads use it.
 
-### Verifying it
+### If you want to re-check whether Plex has fixed it
 
-Plex's ffmpeg is built `--disable-avdevice`, so there is no `lavfi` input - feed it raw NV12
-instead. This exercises device access, driver load, constructors and a real encode in one shot:
+The GPU-side check, which passes today and is not the problem:
 
 ```bash
 kubectl -n plex exec plex-plex-media-server-0 -- sh -c '
 dd if=/dev/urandom of=/tmp/in.nv12 bs=1382400 count=30 2>/dev/null
-"/usr/lib/plexmediaserver/Plex Transcoder" -hide_banner \
+MESA_SHADER_CACHE_DISABLE=true "/usr/lib/plexmediaserver/Plex Transcoder" -hide_banner \
   -f rawvideo -pix_fmt nv12 -s 1280x720 -r 30 -i /tmp/in.nv12 \
   -init_hw_device vaapi=hw:/dev/dri/renderD128 -filter_hw_device hw \
   -vf hwupload -c:v h264_vaapi -f null - 2>&1 | tail -3
 rm -f /tmp/in.nv12'
 ```
 
-Expect `frame=   30` and no `Failed to initialise VAAPI` or `va_openDriver() returns -1`. Add
-`LIBVA_MESSAGING_LEVEL=2` to see libva's driver search.
+(That needs `devic.es/dri` back in the pod spec to have a device at all.)
 
-That only proves the transcoder can. What Plex actually *decided* is in its own log, and this is the
-authoritative check - play something that forces a transcode, then:
+The check that actually matters is whether a hardware job survives. Play something that transcodes,
+then look for a crashed transcoder:
 
 ```bash
 kubectl -n plex exec plex-plex-media-server-0 -- \
-  grep -a "Reached Decision" \
-  "/config/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log" | tail -1
+  grep -a "exit code for process" \
+  "/config/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log" | tail -3
 ```
 
-Want `encoder=h264_vaapi`. A plain `encoder=h264`, or a nearby
-`hardware transcoding: enabled, but no hardware decode accelerator found`, means Plex probed the GPU
-and turned it down. The dashboard shows `(hw)` on the session when it worked.
+`is -11 (signal: Segmentation fault)` means the bug is still there. Note that Plex's
+`Reached Decision ... encoder=h264_vaapi` line is **not** evidence of success - it records the
+decision, not the outcome, and it says `h264_vaapi` even when the job then crashes. Check the running
+process instead:
+
+```bash
+kubectl -n plex exec plex-plex-media-server-0 -- sh -c \
+  'for p in $(pgrep -f "Plex Transcoder"); do tr "\0" "\n" < /proc/$p/cmdline | grep -xE "h264_vaapi|libx264"; done'
+```
+
+### Enabling it, if it ever works again
+
+Hardware transcoding is a server setting, not a container setting:
+**Settings -> Transcoder -> "Use hardware acceleration when available"** (requires Plex Pass).
+Nothing in Git can turn this on. It is already enabled on this server.
 
 ## Resource limits
 
@@ -178,6 +183,9 @@ accounts for Plex properly.
 Note that these values must live under `pms:` - the chart reads `.Values.pms.resources`. They sat at
 the top level of `values` from initial deployment until 2026-09-07, where the chart never looked, so
 the StatefulSet ran with `resources: {}` that whole time.
+
+The no-CPU-limit choice matters more now that transcoding happens on the CPU: a 4K transcode will
+happily use most of the node's cores, and throttling it would be audible.
 
 ## Storage
 
@@ -237,11 +245,6 @@ daily updates. To update immediately:
 ```bash
 kubectl delete pod -n plex plex-plex-media-server-0
 ```
-
-The custom image does not change this - it adds only `/vaapi-amdgpu` and never touches
-`/usr/lib/plexmediaserver` or `/version.txt`. To update the *driver* side instead, push to
-[plex-amd](https://github.com/alexkrebiehl/plex-amd); CI republishes `:latest` and the nightly
-restart picks it up (`pullPolicy: Always`).
 
 ### Manual Restart
 
