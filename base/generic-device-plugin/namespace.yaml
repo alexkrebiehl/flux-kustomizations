@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: generic-device-plugin
+  labels:
+    app.kubernetes.io/name: generic-device-plugin
+    app.kubernetes.io/component: device-plugin
+    app.kubernetes.io/managed-by: kustomize
+    # The plugin itself must be privileged: it mounts /dev and the kubelet's
+    # device-plugin socket directory. Its consumers do not - that is the whole
+    # point of routing device access through a plugin instead of a hostPath.
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
