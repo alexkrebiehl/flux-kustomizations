@@ -41,25 +41,50 @@ spec:
       ALLOWED_NETWORKS: "172.21.10.0/24"
       TZ: "Etc/New_York"
 
-    # Use the "public" image tag - this tag downloads the latest Plex Server version during startup
+    # Our own build of the official image, adding Mesa's AMD VAAPI driver, which
+    # upstream ships no version of at all. Built FROM plexinc/pms-docker:public
+    # and touching nothing under /usr/lib/plexmediaserver, so Plex still fetches
+    # and installs the newest public release at every container start - the daily
+    # plex-restart CronJob is what turns that into daily Plex updates.
+    # Source: https://github.com/alexkrebiehl/plex-amd
     image:
-      tag: public
+      registry: ghcr.io
+      repository: alexkrebiehl/plex-amd
+      tag: latest
+      # "latest" is a moving tag, so the nightly restart must actually re-pull it;
+      # with IfNotPresent the node would keep serving the layer it first cached.
+      pullPolicy: Always
 
     # Storage configuration - use proxmox-zpool storage class
     pms:
       storageClassName: proxmox-zpool
       configStorage: 150Gi
 
+      # NOTE: these MUST live under pms - the chart reads .Values.pms.resources.
+      # They sat at the top level of values from initial deployment until
+      # 2026-09-07, where the chart never looked, so the StatefulSet ran with
+      # resources: {} the whole time.
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          memory: 8Gi
+          # The AMD render node, via generic-device-plugin. This is also what
+          # schedules Plex onto talos-cluster-gpu-1: it is the only node
+          # advertising the resource, so no nodeSelector is needed.
+          #
+          # Deliberately no CPU limit. The constitution asks for requests and
+          # limits on every workload, but CFS throttling mid-transcode is
+          # directly audible as playback stutter, and this is the one workload
+          # where that trade is not worth making. Requests keep the scheduler
+          # honest.
+          devic.es/dri: 1
+
     # Service configuration
     service:
       type: LoadBalancer
       port: 32400
-
-    # Resource limits
-    resources:
-      requests:
-        memory: 512Mi
-        cpu: 500m
 
     # Init container for library migration
     extraInitContainers:
