@@ -114,8 +114,22 @@ onto the GPU node - it is the only node advertising the resource - so no `nodeSe
 **The driver.** The official Plex image contains no VA driver at all: there is no `*_drv_video.so`
 anywhere in `plexmediaserver_*_amd64.deb`. So the image comes from
 [alexkrebiehl/plex-amd](https://github.com/alexkrebiehl/plex-amd), which adds Mesa's `radeonsi`
-driver under `/vaapi-amdgpu` and points `LIBVA_DRIVERS_PATH` at it. That repo documents the musl
-version gap this required working around.
+driver under `/vaapi-amdgpu` and points `LIBVA_DRIVERS_PATH` at it.
+
+That image also ships a newer musl and replaces Plex's bundled copy at every container start,
+because Plex's own musl 1.2.2 cannot load this Mesa. It has to cover all of Plex, not just the
+transcoder: `Plex Media Server` links libavcodec directly and probes VAAPI in-process to decide
+whether hardware transcoding is available at all. The swap is reapplied every start, since Plex
+reinstalls itself over `/usr/lib/plexmediaserver` each time.
+
+If hardware transcoding ever stops working, check that the swap happened:
+
+```bash
+kubectl -n plex logs plex-plex-media-server-0 | grep vaapi
+# expect: [vaapi] replaced Plex's musl with musl 1.2.5 (2 file(s))
+```
+
+The plex-amd repo documents the full diagnosis.
 
 ### Enabling it
 
@@ -125,17 +139,34 @@ Nothing in Git can turn this on.
 
 ### Verifying it
 
+Plex's ffmpeg is built `--disable-avdevice`, so there is no `lavfi` input - feed it raw NV12
+instead. This exercises device access, driver load, constructors and a real encode in one shot:
+
 ```bash
-kubectl -n plex exec plex-plex-media-server-0 -- \
-  /usr/lib/plexmediaserver/Plex\ Transcoder -hide_banner \
-    -init_hw_device vaapi=hw:/dev/dri/renderD128 -filter_hw_device hw \
-    -f lavfi -i testsrc=size=1280x720:rate=30 -t 2 \
-    -vf format=nv12,hwupload -c:v h264_vaapi -f null -
+kubectl -n plex exec plex-plex-media-server-0 -- sh -c '
+dd if=/dev/urandom of=/tmp/in.nv12 bs=1382400 count=30 2>/dev/null
+"/usr/lib/plexmediaserver/Plex Transcoder" -hide_banner \
+  -f rawvideo -pix_fmt nv12 -s 1280x720 -r 30 -i /tmp/in.nv12 \
+  -init_hw_device vaapi=hw:/dev/dri/renderD128 -filter_hw_device hw \
+  -vf hwupload -c:v h264_vaapi -f null - 2>&1 | tail -3
+rm -f /tmp/in.nv12'
 ```
 
-Expect frames encoded, and no `Failed to initialise VAAPI` or `va_openDriver() returns -1`. Add
-`LIBVA_MESSAGING_LEVEL=2` to see libva's driver search. End to end, play something that forces a
-transcode and confirm the Plex dashboard shows `(hw)` on the session.
+Expect `frame=   30` and no `Failed to initialise VAAPI` or `va_openDriver() returns -1`. Add
+`LIBVA_MESSAGING_LEVEL=2` to see libva's driver search.
+
+That only proves the transcoder can. What Plex actually *decided* is in its own log, and this is the
+authoritative check - play something that forces a transcode, then:
+
+```bash
+kubectl -n plex exec plex-plex-media-server-0 -- \
+  grep -a "Reached Decision" \
+  "/config/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log" | tail -1
+```
+
+Want `encoder=h264_vaapi`. A plain `encoder=h264`, or a nearby
+`hardware transcoding: enabled, but no hardware decode accelerator found`, means Plex probed the GPU
+and turned it down. The dashboard shows `(hw)` on the session when it worked.
 
 ## Resource limits
 
