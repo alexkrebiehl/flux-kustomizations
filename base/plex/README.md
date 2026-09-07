@@ -145,12 +145,18 @@ instead. This exercises device access, driver load, constructors and a real enco
 ```bash
 kubectl -n plex exec plex-plex-media-server-0 -- sh -c '
 dd if=/dev/urandom of=/tmp/in.nv12 bs=1382400 count=30 2>/dev/null
+MESA_SHADER_CACHE_DISABLE=true \
 "/usr/lib/plexmediaserver/Plex Transcoder" -hide_banner \
   -f rawvideo -pix_fmt nv12 -s 1280x720 -r 30 -i /tmp/in.nv12 \
   -init_hw_device vaapi=hw:/dev/dri/renderD128 -filter_hw_device hw \
   -vf hwupload -c:v h264_vaapi -f null - 2>&1 | tail -3
 rm -f /tmp/in.nv12'
 ```
+
+Keep `MESA_SHADER_CACHE_DISABLE=true`. `kubectl exec` runs as root while Plex runs as `plex`, so
+without it Mesa creates `/config/.cache` root-owned and mode 0700 and Plex can no longer write its
+shader cache (`Failed to create /config/.cache/mesa_shader_cache ... Permission denied`). The image
+repairs that at every start, so it self-corrects, but there is no reason to cause it.
 
 Expect `frame=   30` and no `Failed to initialise VAAPI` or `va_openDriver() returns -1`. Add
 `LIBVA_MESSAGING_LEVEL=2` to see libva's driver search.
