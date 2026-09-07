@@ -14,6 +14,3 @@ spec:
     - name: proxmox-csi-plugin
     - name: cert-manager
     - name: traefik
-    # Plex requests devic.es/dri for hardware transcoding; without the plugin the
-    # pod sits Pending on "Insufficient devic.es/dri" with nothing naming the cause.
-    - name: generic-device-plugin
