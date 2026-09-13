@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - repository.yaml
+  - pvc.yaml
   - release.yaml
   - serviceaccount.yaml
   - role.yaml

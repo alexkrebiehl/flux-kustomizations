@@ -199,22 +199,37 @@ Media files are served from NFS mounts (not stored in PVC).
 
 ### Transcode scratch volume
 
-`/transcode` (Plex's "Transcoder temporary directory") is a 250Gi **generic ephemeral volume** on
-`proxmox-zpool`, created with the pod and deleted with it:
+`/transcode` (Plex's "Transcoder temporary directory") is the `plex-transcode` claim (`pvc.yaml`) on
+the `nfs-client` class, i.e. a subdirectory of `diskstation.krebiehl.com:/volume1/talos-test-pv`:
 
 ```bash
-kubectl get pvc -n plex plex-plex-media-server-0-pms-transcode
+kubectl get pvc -n plex plex-transcode
 ```
 
 The chart hardcodes this volume as an `emptyDir` with no value to change it, so `release.yaml` swaps
-it in with a `postRenderers` kustomize patch. The emptyDir sat on the node's 38G root disk, and Plex
-refuses a download ("transcode failed" on the device) whenever the source file is larger than the
-transcode volume - the log line is `Low disk space: 72.58GB source file, 37.79GB capacity` followed by
-`failure / diskFull`. 250Gi comfortably exceeds the largest remuxes in the library.
+the claim in with a `postRenderers` kustomize patch. The emptyDir sat on the node's 38G root disk, and
+Plex refuses a download ("transcode failed" on the device) whenever the source file is larger than the
+free space it sees - the log line is `Low disk space: 72.58GB source file, 37.79GB capacity` followed
+by `failure / diskFull`.
 
-`proxmox-zpool` is thick-provisioned (no `sparse 1` on the Proxmox storage), so the zvol reserves the
-full 250G on the pool for as long as the pod exists, even when empty. Because the volume is recreated
-at every restart, the daily `plex-restart` also returns any space left behind by abandoned transcodes.
+Why NFS:
+
+- **Plex needs the space to look large, not to be large.** The download queue works through one item
+  at a time, and an 80G source never used more than ~16G of scratch. On NFS, `df /transcode` reports
+  the free space of the whole Diskstation volume, so the pre-check passes. The 250Gi request is nominal;
+  the provisioner does not enforce it.
+- **`proxmox-zpool` wasted the difference.** A 250Gi generic ephemeral volume there was tried first,
+  but that storage is thick-provisioned (no `sparse 1`), so the zvol reserved 254G on the pool for ~16G
+  of use.
+
+Why a standalone claim rather than an ephemeral volume: `nfs-client` has `archiveOnDelete: true`, so a
+claim deleted with the pod at every daily restart would leave an `archived-*` copy of the transcode
+directory on the NAS each day. Plex cleans up after itself instead - it clears old session directories
+at startup and garbage-collects finished download files.
+
+Trade-off: transcode scratch I/O now shares the 1 GbE path to the Diskstation with the source reads.
+A 4K download transcode measured ~38 MB/s read plus ~9 MB/s write against ~110 MB/s available, so
+this is not the bottleneck; the transcoder's own parallelism is.
 
 ## Troubleshooting
 
@@ -246,6 +261,7 @@ To rollback to source server:
 ## Files
 
 - `release.yaml` - Helm release configuration
+- `pvc.yaml` - NFS claim for the `/transcode` scratch volume
 - `cronjob.yaml` - Daily restart CronJob
 - `role.yaml` - RBAC role for restart job
 - `rolebinding.yaml` - RBAC role binding

@@ -1,0 +1,27 @@
+# Scratch space for Plex's transcoder, mounted at /transcode by the postRenderer
+# patch in release.yaml.
+#
+# On NFS rather than proxmox-zpool: that pool is thick-provisioned, so a zvol
+# reserves its full size on the pool even though transcoding never used more
+# than ~16G of it. NFS reserves nothing.
+#
+# The size is nominal - nfs-subdir-external-provisioner does not enforce it, and
+# Plex sees the free space of the whole Diskstation volume. That is what Plex's
+# download pre-check needs: it refuses a transcode when the source file is larger
+# than the free space it sees.
+#
+# A standalone claim rather than an ephemeral volume on purpose: nfs-client has
+# archiveOnDelete: true, so deleting the claim at every daily restart would leave
+# an archived-* copy of the transcode directory on the NAS each time.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plex-transcode
+  namespace: plex
+spec:
+  storageClassName: nfs-client
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 250Gi
