@@ -88,7 +88,9 @@ spec:
               cpu: 500m
               memory: 1Gi
             limits:
-              memory: 4Gi
+              # Was 4Gi, which the first library scan outgrew: OOMKilled on
+              # 2026-09-13, cutting the scan off partway. 8Gi matches Plex.
+              memory: 8Gi
               # The AMD render node, via generic-device-plugin. This is also what
               # schedules Jellyfin onto talos-cluster-gpu-1: it is the only node
               # advertising the resource, so no nodeSelector is needed.

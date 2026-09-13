@@ -126,7 +126,16 @@ workload, but this is the same exception Plex makes. The GPU handles the video, 
 transcodes, subtitle burn-in and trickplay generation still run on the CPU, and CFS throttling
 mid-stream is audible as stutter. Requests are set so the scheduler still counts Jellyfin.
 
-Memory is capped at 4Gi.
+Memory is capped at **8Gi**, the same as Plex. It started at 4Gi, and the first library scan
+outgrew that: the container was `OOMKilled` on 2026-09-13 about 13 minutes into the scan, which
+cut the scan off partway. Check for a repeat with:
+
+```bash
+kubectl -n jellyfin get pod -l app.kubernetes.io/name=jellyfin \
+  -o jsonpath='{.items[0].status.containerStatuses[0].lastState}'
+```
+
+A `"reason":"OOMKilled"` there means the limit was hit again.
 
 ## Storage
 
