@@ -15,6 +15,7 @@ resources:
   - generic-device-plugin-ks.yaml
   - wg-easy-ks.yaml
   - plex-ks.yaml
+  - jellyfin-ks.yaml
   - ntfy-ks.yaml
   - kube-prometheus-stack-ks.yaml
   - prometheus-pve-exporter-ks.yaml

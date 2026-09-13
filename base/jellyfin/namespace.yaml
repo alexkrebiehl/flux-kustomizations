@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jellyfin
+  labels:
+    app.kubernetes.io/name: jellyfin
+    app.kubernetes.io/component: media-server
+    app.kubernetes.io/managed-by: kustomize
+    # baseline, not restricted: restricted forbids nfs volumes, and the media
+    # library is mounted straight from the NAS. The GPU arrives through
+    # generic-device-plugin, which needs no privilege from this namespace.
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/warn: baseline

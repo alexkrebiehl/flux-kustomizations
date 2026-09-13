@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-config
+  namespace: jellyfin
+  labels:
+    app.kubernetes.io/name: jellyfin
+    app.kubernetes.io/component: media-server
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: proxmox-zpool
+  resources:
+    requests:
+      # Database, metadata, and trickplay/chapter images, which grow with the
+      # library. proxmox-zpool allows expansion if this runs short.
+      storage: 50Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-cache
+  namespace: jellyfin
+  labels:
+    app.kubernetes.io/name: jellyfin
+    app.kubernetes.io/component: media-server
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: proxmox-zpool
+  resources:
+    requests:
+      # Transcode segments land in /cache/transcodes. This is a PVC rather than an
+      # emptyDir because an emptyDir would sit on the only worker's 38G root disk,
+      # and a few concurrent 4K transcodes filling that disk would get every pod
+      # in the cluster evicted.
+      storage: 30Gi

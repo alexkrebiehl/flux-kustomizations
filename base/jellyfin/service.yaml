@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+  labels:
+    app.kubernetes.io/name: jellyfin
+    app.kubernetes.io/component: media-server
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  # LoadBalancer, like Plex, so LAN clients can reach :8096 directly without going
+  # through Traefik. The ingress uses the same Service as its backend.
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: jellyfin
+  ports:
+    - name: http
+      port: 8096
+      targetPort: http
+      protocol: TCP
