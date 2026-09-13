@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+  labels:
+    app.kubernetes.io/name: jellyfin
+    app.kubernetes.io/component: media-server
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  replicas: 1
+  strategy:
+    # RWO volumes: the old pod must release them before the new one starts.
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jellyfin
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jellyfin
+        app.kubernetes.io/component: media-server
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        # Makes the proxmox-zpool volumes writable for the non-root user. No render
+        # group is needed: generic-device-plugin injects renderD128 as mode 0666.
+        fsGroup: 1000
+        # The config volume holds many small metadata files; only walk it when the
+        # ownership is actually wrong, not on every start.
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: jellyfin
+          # "12.0" follows 12.0 patch releases, but with IfNotPresent the node keeps
+          # the image it first pulled - an update only happens when this is bumped.
+          image: docker.io/jellyfin/jellyfin:12.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8096
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          # The image already defaults JELLYFIN_DATA_DIR to /config and
+          # JELLYFIN_CACHE_DIR to /cache, so no env is needed.
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: cache
+              mountPath: /cache
+            - name: media
+              mountPath: /media/library
+              readOnly: true
+            - name: optimized
+              mountPath: /media/optimized
+              readOnly: true
+          # First boot runs database migrations and can be slow against a large
+          # library; give it up to 5 minutes before liveness takes over.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          resources:
+            # Deliberately no CPU limit, for the same reason as Plex. The GPU does
+            # the video, but audio transcodes, subtitle burn-in and trickplay
+            # generation are still CPU work, and CFS throttling mid-stream is
+            # audible as stutter. Requests keep the scheduler honest.
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              memory: 4Gi
+              # The AMD render node, via generic-device-plugin. This is also what
+              # schedules Jellyfin onto talos-cluster-gpu-1: it is the only node
+              # advertising the resource, so no nodeSelector is needed.
+              devic.es/dri: 1
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: jellyfin-config
+        - name: cache
+          persistentVolumeClaim:
+            claimName: jellyfin-cache
+        # The same NAS exports Plex mounts, at the same paths, so library paths
+        # read identically in both servers. Both read-only here: Plex owns these
+        # trees, and Jellyfin's "save artwork/NFO into media folders" option would
+        # otherwise write into them.
+        - name: media
+          nfs:
+            server: diskstation.krebiehl.com
+            path: /volume1/plex
+            readOnly: true
+        - name: optimized
+          nfs:
+            server: diskstation.krebiehl.com
+            path: /volume1/plex-optimized
+            readOnly: true
