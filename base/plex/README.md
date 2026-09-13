@@ -197,6 +197,25 @@ kubectl get pvc -n plex
 
 Media files are served from NFS mounts (not stored in PVC).
 
+### Transcode scratch volume
+
+`/transcode` (Plex's "Transcoder temporary directory") is a 250Gi **generic ephemeral volume** on
+`proxmox-zpool`, created with the pod and deleted with it:
+
+```bash
+kubectl get pvc -n plex plex-plex-media-server-0-pms-transcode
+```
+
+The chart hardcodes this volume as an `emptyDir` with no value to change it, so `release.yaml` swaps
+it in with a `postRenderers` kustomize patch. The emptyDir sat on the node's 38G root disk, and Plex
+refuses a download ("transcode failed" on the device) whenever the source file is larger than the
+transcode volume - the log line is `Low disk space: 72.58GB source file, 37.79GB capacity` followed by
+`failure / diskFull`. 250Gi comfortably exceeds the largest remuxes in the library.
+
+`proxmox-zpool` is thick-provisioned (no `sparse 1` on the Proxmox storage), so the zvol reserves the
+full 250G on the pool for as long as the pod exists, even when empty. Because the volume is recreated
+at every restart, the daily `plex-restart` also returns any space left behind by abandoned transcodes.
+
 ## Troubleshooting
 
 ### Library Not Visible After Migration

@@ -32,6 +32,42 @@ spec:
         name: plex
         namespace: plex
       interval: 1h
+  # The chart hardcodes /transcode as an emptyDir, which lands on the node's 38G
+  # root disk. Plex refuses a download transcode outright when the source file
+  # is larger than that volume ("Low disk space: 72.58GB source file, 37.79GB
+  # capacity" -> diskFull), so large films could not be downloaded at all, and a
+  # big streaming transcode risked DiskPressure eviction.
+  #
+  # A generic ephemeral volume gives it real storage without a separate PVC to
+  # manage: it is created with the pod and deleted with it, so every restart
+  # (daily, via plex-restart) starts from a clean scratch disk and returns all of
+  # its space. proxmox-zpool is thick-provisioned, so the full 250Gi is reserved
+  # on the pool while the pod exists, even when empty.
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: StatefulSet
+              name: plex-plex-media-server
+            patch: |
+              apiVersion: apps/v1
+              kind: StatefulSet
+              metadata:
+                name: plex-plex-media-server
+              spec:
+                template:
+                  spec:
+                    volumes:
+                      - name: pms-transcode
+                        emptyDir: null
+                        ephemeral:
+                          volumeClaimTemplate:
+                            spec:
+                              accessModes: ["ReadWriteOnce"]
+                              storageClassName: proxmox-zpool
+                              resources:
+                                requests:
+                                  storage: 250Gi
   values:
     # Plex configuration
     timezone: America/New_York
