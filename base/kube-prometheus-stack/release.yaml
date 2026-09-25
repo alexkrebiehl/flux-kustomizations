@@ -100,16 +100,6 @@ spec:
             - receiver: "null"
               matchers:
                 - alertname =~ "KubeCPUOvercommit|KubeMemoryOvercommit"
-            # Info alerts (e.g. CPUThrottlingHigh) are never worth a push
-            # notification; they stay visible in Prometheus and Grafana. This
-            # is a route rather than the chart's InfoInhibitor inhibit rule on
-            # purpose: InfoInhibitor is derived from ALERTS, so it always lands
-            # at least one evaluation after the info alert it should mute, and
-            # a flapping alert (kubelet-serving-cert-approver throttles
-            # hundreds of times a week) kept slipping through that window.
-            - receiver: "null"
-              matchers:
-                - severity = "info"
             - receiver: ntfy-critical
               matchers:
                 - severity = "critical"
