@@ -110,6 +110,16 @@ spec:
             target_matchers:
               - severity = "warning"
             equal: ["alertname", "namespace"]
+          # Info alerts (e.g. CPUThrottlingHigh) only matter alongside a
+          # warning/critical alert in the same namespace. InfoInhibitor fires
+          # when an info alert is alone and mutes it; it's routed to "null"
+          # above. The chart ships this rule, but overriding inhibit_rules
+          # dropped it.
+          - source_matchers:
+              - alertname = "InfoInhibitor"
+            target_matchers:
+              - severity = "info"
+            equal: ["namespace"]
         receivers:
           - name: "null"
           # ntfy renders these with the "alertmanager" template overridden in
