@@ -49,10 +49,21 @@ spec:
         # Coarse tripwire for the same failure, catching cases the per-PVC rule
         # misses -- a volume with no running pod, or drift that appears before
         # any workload touches it.
+        #
+        # The kubelet side is limited to Proxmox PVCs: NFS volumes report
+        # kubelet stats but never get a VolumeAttachment, so counting them made
+        # this fire permanently. Written as a difference so {{ $value }} is the
+        # drift itself, not the attachment total.
         - alert: CSIVolumeAttachmentDrift
           expr: >-
-            count(kube_volumeattachment_status_attached)
-            != count(count by (namespace, persistentvolumeclaim) (kubelet_volume_stats_capacity_bytes))
+            (
+              count(kube_volumeattachment_status_attached == 1)
+              - count(count by (namespace, persistentvolumeclaim) (
+                  kubelet_volume_stats_capacity_bytes
+                  and on (namespace, persistentvolumeclaim)
+                  kube_persistentvolumeclaim_info{storageclass=~"proxmox-.*"}
+                ))
+            ) != 0
           for: 15m
           labels:
             severity: warning
