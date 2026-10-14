@@ -90,16 +90,6 @@ spec:
             - receiver: "null"
               matchers:
                 - alertname = "InfoInhibitor"
-            # Both compare total pod requests against cluster capacity minus one
-            # node, so they answer "could we survive losing a node". With a
-            # single worker that headroom is zero and they fire permanently -
-            # true, but nothing anyone can act on short of adding a second
-            # worker VM. Routed away rather than disabled in defaultRules so
-            # they stay visible in Prometheus and Grafana; if a second worker is
-            # ever added, delete this route and they become meaningful again.
-            - receiver: "null"
-              matchers:
-                - alertname =~ "KubeCPUOvercommit|KubeMemoryOvercommit"
             - receiver: ntfy-critical
               matchers:
                 - severity = "critical"
@@ -277,3 +267,12 @@ spec:
         nodeExporterRecording: false
         prometheus: true
         prometheusOperator: true
+      disabled:
+        # Both compare total pod requests against cluster capacity minus the
+        # largest node, so they answer "could we survive losing a node". They
+        # can't be satisfied here: gpu-1 holds most of the capacity and its GPU
+        # workloads can't move anyway, and every node is a VM on the same
+        # Proxmox host, so the realistic failure takes out the whole cluster
+        # regardless of headroom.
+        KubeCPUOvercommit: true
+        KubeMemoryOvercommit: true
