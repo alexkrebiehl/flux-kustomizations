@@ -49,6 +49,12 @@ spec:
       kubernetesCRD:
         enabled: true
         allowCrossNamespace: true
+        # Collision-safe names for CRD-generated routers/middlewares/services
+        # (v3.8 warns when unset). References to CRD objects from Ingress
+        # annotations must use namespace_name@kubernetescrd, not
+        # namespace-name@kubernetescrd: a reference in the old form is not
+        # resolved and its router is not created.
+        safeNaming: true
       kubernetesIngress:
         enabled: true
         publishedService:
