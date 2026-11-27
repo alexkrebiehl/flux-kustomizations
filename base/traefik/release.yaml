@@ -8,18 +8,28 @@ spec:
   chart:
     spec:
       chart: traefik
-      version: "32.1.1"
+      version: "42.4.3"
       sourceRef:
         kind: HelmRepository
         name: traefik
         namespace: traefik
       interval: 1h
+  # Helm never upgrades CRDs on its own. The chart's crds/ holds only
+  # traefik.io and hub.traefik.io CRDs (no Gateway API ones; base/gateway-api
+  # owns those), so letting Flux replace them is safe and keeps them in step
+  # with the proxy version.
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
   values:
     deployment:
       replicas: 1
 
+    # Chart 40+ takes Service fields under service.spec.
     service:
-      type: LoadBalancer
+      spec:
+        type: LoadBalancer
 
     ports:
       web:
@@ -44,8 +54,8 @@ spec:
         publishedService:
           enabled: true
 
-    logs:
-      general:
-        level: INFO
-      access:
-        enabled: true
+    # Chart 41 split logs.general/logs.access into log/accessLog.
+    log:
+      level: INFO
+    accessLog:
+      enabled: true
