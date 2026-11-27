@@ -195,6 +195,16 @@ spec:
           cpu: 500m
           memory: 512Mi
 
+      # The grafana PVC is RWO (proxmox-zpool). A rolling update starts the
+      # new pod before the old one stops, and if they land on different
+      # nodes the volume can't attach, so the rollout deadlocks (it did on
+      # the 81 -> 94 upgrade). Recreate stops the old pod first.
+      # rollingUpdate: null clears the server-defaulted block, which the API
+      # rejects alongside type Recreate.
+      deploymentStrategy:
+        type: Recreate
+        rollingUpdate: null
+
       # Storage for dashboards
       persistence:
         enabled: true
