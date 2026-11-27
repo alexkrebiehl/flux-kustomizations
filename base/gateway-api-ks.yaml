@@ -1,12 +1,12 @@
 # Gateway API CRDs, owned here rather than by the Traefik chart.
 #
-# The Traefik chart ships its own copy of the Gateway API CRDs under crds/
-# (v1.1.0 in chart 32.1.1, v1.4.0 in 39.x). Helm never updates files in a
-# chart's crds/ directory on upgrade, so this Kustomization applies last and
-# keeps the cluster on the Gateway API version pinned here.
+# Older Traefik charts shipped their own copy under crds/ (v1.1.0 in 32.1.1,
+# v1.4.0 in 39.x). Charts 42+ ship none, so the Traefik HelmRelease's
+# upgrade.crds: CreateReplace only touches traefik.io/hub.traefik.io CRDs.
+# This file stays the single owner of the Gateway API version.
 #
-# Do NOT set upgrade.crds on the Traefik HelmRelease: it would make Traefik
-# reassert its own (older) Gateway API CRDs on every chart bump.
+# Traefik proxy v3.8+ expects Gateway API v1.7.0 or newer. Bump these CRDs
+# before Traefik, not after.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
