@@ -8,9 +8,17 @@ spec:
   chart:
     spec:
       chart: metallb
-      version: "0.15.3"
+      version: "0.16.2"
       sourceRef:
         kind: HelmRepository
         name: metallb
         namespace: metallb
       interval: 1h
+  values:
+    # L2-only cluster (no BGPPeers): run native mode with no BGP backend.
+    # 0.16 makes frr-k8s the default and deprecates FRR mode.
+    frrk8s:
+      enabled: false
+    speaker:
+      frr:
+        enabled: false
