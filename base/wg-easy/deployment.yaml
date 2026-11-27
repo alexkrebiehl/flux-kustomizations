@@ -20,11 +20,11 @@ spec:
         app: wg-easy
         app.kubernetes.io/name: wg-easy
         app.kubernetes.io/component: vpn
-        version: 15.2.1
+        version: 15.5.0
     spec:
       containers:
         - name: wg-easy
-          image: ghcr.io/wg-easy/wg-easy:15.3.0
+          image: ghcr.io/wg-easy/wg-easy:15.5.0
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "/scripts/startup.sh"]
           env:

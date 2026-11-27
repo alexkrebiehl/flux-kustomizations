@@ -120,7 +120,7 @@ spec:
     # Init container for library migration
     extraInitContainers:
       - name: library-extractor
-        image: alpine:3.19
+        image: alpine:3.24
         command:
           - /bin/sh
           - -c
