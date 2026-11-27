@@ -8,7 +8,7 @@ spec:
   chart:
     spec:
       chart: external-dns
-      version: "1.20.0"
+      version: "1.24.0"
       sourceRef:
         kind: HelmRepository
         name: external-dns
@@ -30,8 +30,15 @@ spec:
       # Read the zone back over AXFR (TSIG-signed with the same key). Without
       # it external-dns can't see existing records, so policy: sync never
       # deletes anything: removed apps leave their A/TXT records behind and
-      # every record is re-sent each interval.
-      - --rfc2136-tsig-axfr
+      # every record is re-sent each interval. (Was --rfc2136-tsig-axfr,
+      # deprecated in v0.22; AXFR is still TSIG-signed unless
+      # --rfc2136-axfr-insecure is set.)
+      - --rfc2136-axfr
+      # TEMPORARY: v0.22 dropped the external-dns.alpha.kubernetes.io/
+      # annotation prefix. Keep reading it until the LoadBalancer Services in
+      # flux-kustomizations-internal move to external-dns.kubernetes.io/,
+      # otherwise policy: sync deletes their records. Remove after that.
+      - --enable-legacy-annotation-prefix
     env:
       - name: EXTERNAL_DNS_RFC2136_TSIG_SECRET
         valueFrom:
