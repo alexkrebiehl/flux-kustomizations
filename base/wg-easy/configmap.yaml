@@ -27,6 +27,13 @@ data:
     # workaround never applied and the container crash-looped. Downgrading it
     # to a warning lets wg-easy survive its own failed attempt and keeps it
     # alive for the patcher to fix the config and bring the interface up.
+    # Since 15.5, wg-easy treats a failed `wg-quick up` at startup as fatal
+    # and exits, before the patcher below can rewrite wg0.conf. So the nft
+    # hooks are written into wg-easy's own database first, and wg-easy then
+    # generates wg0.conf with them. The patcher stays as a fallback for the
+    # very first boot, before the database exists.
+    node /scripts/ensure-hooks.mjs || echo "ensure-hooks failed; relying on the patcher" >&2
+
     node --unhandled-rejections=warn server/index.mjs &
     WGEASY_PID=$!
 
@@ -64,6 +71,38 @@ data:
 
     # Wait for main process to exit
     wait $WGEASY_PID
+  ensure-hooks.mjs: |
+    // Point wg-easy's PostUp/PostDown hooks (hooks_table, one row per
+    // interface) at the nft scripts. Run before wg-easy starts. If the
+    // database or table doesn't exist yet (first boot), it does nothing.
+    import { existsSync } from "node:fs";
+
+    const DB = "/etc/wireguard/wg-easy.db";
+    const UP = "/scripts/wg-nat-up.sh";
+    const DOWN = "/scripts/wg-nat-down.sh";
+
+    if (!existsSync(DB)) {
+      console.log("ensure-hooks: no database yet, skipping");
+      process.exit(0);
+    }
+    // The image's pruned node_modules only ships the ESM build of the client.
+    const { createClient } = await import("/app/server/node_modules/@libsql/client/lib-esm/node.js");
+    const db = createClient({ url: `file:${DB}` });
+    try {
+      const { rows } = await db.execute("SELECT id, post_up, post_down FROM hooks_table");
+      for (const row of rows) {
+        if (row.post_up === UP && row.post_down === DOWN) continue;
+        await db.execute({
+          sql: "UPDATE hooks_table SET post_up = ?, post_down = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+          args: [UP, DOWN, row.id],
+        });
+        console.log(`ensure-hooks: ${row.id} PostUp/PostDown now use the nft scripts`);
+      }
+    } catch (e) {
+      console.log(`ensure-hooks: hooks table not ready (${e.message}), skipping`);
+    } finally {
+      db.close();
+    }
   wg-nat-up.sh: |
     #!/bin/sh
     # Sets up MASQUERADE for VPN clients using nft, since Talos nodes don't
