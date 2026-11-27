@@ -34,11 +34,6 @@ spec:
       # deprecated in v0.22; AXFR is still TSIG-signed unless
       # --rfc2136-axfr-insecure is set.)
       - --rfc2136-axfr
-      # TEMPORARY: v0.22 dropped the external-dns.alpha.kubernetes.io/
-      # annotation prefix. Keep reading it until the LoadBalancer Services in
-      # flux-kustomizations-internal move to external-dns.kubernetes.io/,
-      # otherwise policy: sync deletes their records. Remove after that.
-      - --enable-legacy-annotation-prefix
     env:
       - name: EXTERNAL_DNS_RFC2136_TSIG_SECRET
         valueFrom:
