@@ -27,6 +27,11 @@ spec:
       - --rfc2136-tsig-secret-alg=hmac-sha512
       - --rfc2136-tsig-keyname=krebiehl.com.
       - --rfc2136-min-ttl=0s
+      # Read the zone back over AXFR (TSIG-signed with the same key). Without
+      # it external-dns can't see existing records, so policy: sync never
+      # deletes anything: removed apps leave their A/TXT records behind and
+      # every record is re-sent each interval.
+      - --rfc2136-tsig-axfr
     env:
       - name: EXTERNAL_DNS_RFC2136_TSIG_SECRET
         valueFrom:
