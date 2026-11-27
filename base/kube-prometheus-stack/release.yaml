@@ -8,12 +8,19 @@ spec:
   chart:
     spec:
       chart: kube-prometheus-stack
-      version: "81.5.0"
+      version: "94.1.0"
       sourceRef:
         kind: HelmRepository
         name: prometheus-community
         namespace: monitoring
       interval: 1h
+  # The operator CRDs change with almost every chart major and Helm never
+  # upgrades CRDs itself, so let Flux replace them from the chart's crds
+  # subchart.
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
   values:
     # DISABLE for lightweight setup
     nodeExporter:
