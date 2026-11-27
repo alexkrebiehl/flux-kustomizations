@@ -38,7 +38,7 @@ spec:
         - name: jellyfin
           # "12.0" follows 12.0 patch releases, but with IfNotPresent the node keeps
           # the image it first pulled - an update only happens when this is bumped.
-          image: docker.io/jellyfin/jellyfin:12.0
+          image: docker.io/jellyfin/jellyfin:12.4
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
